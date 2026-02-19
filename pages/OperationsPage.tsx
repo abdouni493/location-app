@@ -54,8 +54,8 @@ const FuelSelector: React.FC<{ value: string, onChange: (v: string) => void, lan
     { id: 'vide', label: '0/0', icon: '⚠️', color: 'bg-red-600' }
   ];
   return (
-    <div className="grid grid-cols-5 gap-3">
-      {levels.map(l => (
+    <div className="grid grid-cols-2 gap-3">
+      {levels.map((l) => (
         <button
           key={l.id}
           type="button"
@@ -500,64 +500,7 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
                             );
                             })}
 
-                            {/* --- PRINT CHOICE MODAL FOR INSPECTIONS --- */}
-                            {activeModal === 'print-choice' && selectedInspForPrint && (
-                              <div className="fixed inset-0 z-[350] bg-black/60 flex items-center justify-center p-4">
-                                <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
-                                  <h3 className="text-xl font-black mb-4">Choisir une action</h3>
-                                  <p className="text-sm text-gray-500 mb-6">Voulez-vous personnaliser le document ou imprimer directement avec le modèle enregistré ?</p>
-                                  <div className="flex gap-3">
-                                    <button onClick={() => { setActiveModal('personalize'); }} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-2xl font-black">Personnaliser</button>
-                                    <button onClick={() => { 
-                                      // default to checkin or checkout based on inspection type
-                                      const cat = selectedInspForPrint?.type === 'depart' ? 'checkin' : 'checkout';
-                                      // find reservation id
-                                      const res = allReservations.find(r => r.id === selectedInspForPrint?.reservationId);
-                                      if (res) handlePrint(res.id, cat);
-                                    }} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-2xl font-black">Imprimer avec le modèle</button>
-                                  </div>
-                                  <div className="mt-4">
-                                    <button onClick={() => { setActiveModal(null); setSelectedInspForPrint(null); }} className="w-full px-4 py-2 bg-gray-100 rounded-2xl">Annuler</button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* --- PERSONALIZATION MODAL --- */}
-                            {activeModal === 'personalize' && selectedInspForPrint && (() => {
-                              const rawRes = allReservations.find(r => r.id === selectedInspForPrint.reservationId);
-                              const reservationObject = normalizeReservation(rawRes);
-                              const customerObject = normalizeCustomer(allCustomers.find(c => c.id === rawRes?.customer_id));
-                              const vehicleObject = vehicles.find(v => v.id === rawRes?.vehicle_id || rawRes?.vehicleId);
-                              if (!reservationObject || !customerObject || !vehicleObject) {
-                                return (
-                                  <div className="fixed inset-0 z-[350] bg-black/60 flex items-center justify-center p-4">
-                                    <div className="bg-white p-8 rounded-2xl">Données manquantes pour la personnalisation.</div>
-                                  </div>
-                                );
-                              }
-
-                              return (
-                                <DocumentPersonalizer
-                                  lang={lang}
-                                  reservation={reservationObject}
-                                  customer={customerObject}
-                                  vehicle={vehicleObject}
-                                  docType={(selectedInspForPrint.type === 'depart' ? 'checkin' : 'checkout') as any}
-                                  storeLogo={undefined}
-                                  storeInfo={undefined}
-                                  onSaveTemplate={(template) => {
-                                    if (onUpdateTemplates) {
-                                      const updated = templates.filter(t => t.category !== template.category);
-                                      onUpdateTemplates([...updated, template]);
-                                    }
-                                    setActiveModal(null);
-                                    setSelectedInspForPrint(null);
-                                  }}
-                                  onClose={() => { setActiveModal(null); setSelectedInspForPrint(null); }}
-                                />
-                              );
-                            })()}
+                            
                           </div>
                         )}
                       </div>
@@ -702,6 +645,61 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
 
   return (
     <div className={`p-4 md:p-8 animate-fade-in ${isRtl ? 'font-arabic text-right' : ''}`}>
+      {/* Global Print / Personalize Modals for inspections */}
+      {activeModal === 'print-choice' && selectedInspForPrint && (
+        <div className="fixed inset-0 z-[350] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-black mb-4">Choisir une action</h3>
+            <p className="text-sm text-gray-500 mb-6">Voulez-vous personnaliser le document ou imprimer directement avec le modèle enregistré ?</p>
+            <div className="flex gap-3">
+              <button onClick={() => { setActiveModal('personalize'); }} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-2xl font-black">Personnaliser</button>
+              <button onClick={() => {
+                const cat = selectedInspForPrint?.type === 'depart' ? 'checkin' : 'checkout';
+                const res = allReservations.find(r => r.id === selectedInspForPrint?.reservationId);
+                if (res) handlePrint(res.id, cat);
+              }} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-2xl font-black">Imprimer avec le modèle</button>
+            </div>
+            <div className="mt-4">
+              <button onClick={() => { setActiveModal(null); setSelectedInspForPrint(null); }} className="w-full px-4 py-2 bg-gray-100 rounded-2xl">Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'personalize' && selectedInspForPrint && (() => {
+        const rawRes = allReservations.find(r => r.id === selectedInspForPrint.reservationId);
+        const reservationObject = normalizeReservation(rawRes);
+        const customerObject = normalizeCustomer(allCustomers.find(c => c.id === rawRes?.customer_id));
+        const vehicleObject = vehicles.find(v => v.id === rawRes?.vehicle_id || rawRes?.vehicleId);
+        if (!reservationObject || !customerObject || !vehicleObject) {
+          return (
+            <div className="fixed inset-0 z-[350] bg-black/60 flex items-center justify-center p-4">
+              <div className="bg-white p-8 rounded-2xl">Données manquantes pour la personnalisation.</div>
+            </div>
+          );
+        }
+
+        return (
+          <DocumentPersonalizer
+            lang={lang}
+            reservation={reservationObject}
+            customer={customerObject}
+            vehicle={vehicleObject}
+            docType={(selectedInspForPrint.type === 'depart' ? 'checkin' : 'checkout') as any}
+            storeLogo={undefined}
+            storeInfo={undefined}
+            onSaveTemplate={(template) => {
+              if (onUpdateTemplates) {
+                const updated = templates.filter(t => t.category !== template.category);
+                onUpdateTemplates([...updated, template]);
+              }
+              setActiveModal(null);
+              setSelectedInspForPrint(null);
+            }}
+            onClose={() => { setActiveModal(null); setSelectedInspForPrint(null); }}
+          />
+        );
+      })()}
       <div className="flex gap-4 mb-16">
         <button onClick={() => setActiveTab('inspection')} className={`px-12 py-5 rounded-[2.5rem] font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'inspection' ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-white text-gray-400 border border-gray-100'}`}>🔍 {t.inspection}</button>
         <button onClick={() => setActiveTab('dommages')} className={`px-12 py-5 rounded-[2.5rem] font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'dommages' ? 'bg-red-600 text-white shadow-xl shadow-red-100' : 'bg-white text-gray-400 border border-gray-100'}`}>💥 {t.dommages}</button>
