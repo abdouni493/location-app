@@ -15,7 +15,7 @@ export async function getRentalAIAnalysis(
     }
     
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     const contextString = JSON.stringify(dataContext, null, 2);
     
