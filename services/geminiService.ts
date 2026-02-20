@@ -1,5 +1,5 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 export async function getRentalAIAnalysis(
   category: string,
@@ -7,16 +7,14 @@ export async function getRentalAIAnalysis(
   language: 'fr' | 'ar'
 ) {
   try {
-    // Get API key from environment - Vite uses import.meta.env
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    // Get API key from environment
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
     
     if (!apiKey) {
-      throw new Error('VITE_GEMINI_API_KEY is not configured');
+      throw new Error('VITE_OPENAI_API_KEY is not configured');
     }
     
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-flash which is stable and widely supported
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
     
     const contextString = JSON.stringify(dataContext, null, 2);
     
@@ -94,39 +92,54 @@ export async function getRentalAIAnalysis(
          
          الصيغة: واضحة احترافية وسهلة الفهم والتنفيذ.`;
 
-    const response = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 3000
-      }
+    const response = await client.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: systemInstruction
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
     });
 
-    const result = await response.response;
-    return result.text();
+    const result = response.choices[0]?.message?.content;
+    if (!result) {
+      throw new Error('No response from OpenAI');
+    }
+    
+    return result;
   } catch (error: any) {
     console.error("AI Analysis failed:", error);
     const errorMessage = error?.message || 'Unknown error';
     
-    if (errorMessage.includes('VITE_GEMINI_API_KEY')) {
+    if (errorMessage.includes('VITE_OPENAI_API_KEY')) {
       return language === 'fr' 
-        ? "❌ Clé API Gemini non configurée. Veuillez ajouter VITE_GEMINI_API_KEY à votre fichier .env" 
-        : "❌ مفتاح API Gemini غير مكون. يرجى إضافة VITE_GEMINI_API_KEY إلى ملف .env الخاص بك";
+        ? "❌ Clé API OpenAI non configurée. Veuillez ajouter VITE_OPENAI_API_KEY à votre fichier .env" 
+        : "❌ مفتاح API OpenAI غير مكون. يرجى إضافة VITE_OPENAI_API_KEY إلى ملف .env الخاص بك";
     }
     
-    if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+    if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
       return language === 'fr' 
-        ? "❌ Erreur Gemini: Modèle non disponible ou clé API invalide. Vérifiez votre clé API sur https://console.cloud.google.com" 
-        : "❌ خطأ Gemini: النموذج غير متاح أو مفتاح API غير صحيح. تحقق من مفتاح API الخاص بك على https://console.cloud.google.com";
+        ? "❌ Erreur OpenAI: Clé API invalide ou expiré. Vérifiez votre clé sur https://platform.openai.com/account/api-keys" 
+        : "❌ خطأ OpenAI: مفتاح API غير صحيح أو منتهي الصلاحية. تحقق من مفتاحك على https://platform.openai.com/account/api-keys";
     }
     
-    if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('403')) {
+    if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
       return language === 'fr' 
-        ? "❌ Erreur: Votre clé API n'a pas les permissions nécessaires. Habilitez l'API Generative AI dans Google Cloud Console." 
-        : "❌ خطأ: مفتاح API الخاص بك لا يحتوي على الأذونات اللازمة. قم بتفعيل API Generative AI في وحدة التحكم بـ Google Cloud.";
+        ? "❌ Erreur: Limite de taux dépassée. Attendez quelques secondes et réessayez." 
+        : "❌ خطأ: تم تجاوز حد المعدل. انتظر بضع ثوان وحاول مرة أخرى.";
+    }
+    
+    if (errorMessage.includes('500') || errorMessage.includes('server error')) {
+      return language === 'fr' 
+        ? "❌ Erreur serveur OpenAI. Veuillez réessayer dans quelques instants." 
+        : "❌ خطأ خادم OpenAI. يرجى المحاولة مرة أخرى بعد قليل.";
     }
     
     return language === 'fr' 
