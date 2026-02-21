@@ -684,6 +684,10 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                     <img src={v?.mainImage} alt={v?.brand} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                     {/* Status Badge */}
                     <span className={`absolute top-3 right-3 px-4 py-2 rounded-[1.5rem] text-[10px] font-black uppercase text-white shadow-lg ${statusColors[res.status as keyof typeof statusColors] || 'bg-gray-600'}`}>{res.status}</span>
+                    {/* Delete Button */}
+                    <button onClick={() => handleDeleteRes(res.id)} title="Supprimer" className="absolute top-3 left-3 bg-white/95 text-red-600 hover:bg-red-600 hover:text-white rounded-full p-2 shadow-md transition-colors">
+                      🗑️
+                    </button>
                     {/* Client Avatar */}
                     <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 backdrop-blur rounded-full pr-3 shadow-lg">
                       {c?.profilePicture ? (
