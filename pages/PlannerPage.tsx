@@ -663,7 +663,7 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
 
           {/* Cards View */}
           {viewMode === 'cards' && (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredReservations.map(res => {
               const c = getCustomer(res.customerId);
               const v = getVehicle(res.vehicleId);
@@ -678,61 +678,80 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
               };
               
               return (
-                <div key={res.id} className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-300">
-                  <div className="flex">
-                    {/* Left: Car Image and client avatar */}
-                    <div className="relative w-56 h-44 flex-shrink-0 bg-gray-100 overflow-hidden">
-                      <img src={v?.mainImage} alt={v?.brand} className="w-full h-full object-cover" />
-                      <div className="absolute top-3 left-3 flex items-center gap-3">
-                        {c?.profilePicture ? (
-                          <img src={c.profilePicture} alt="Client" className="w-12 h-12 rounded-full border-2 border-white shadow-lg object-cover" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black">{(c?.firstName || 'C')[0]}</div>
-                        )}
-                        <div className="text-xs text-white drop-shadow-sm">
-                          <div className="font-black">{c?.firstName} {c?.lastName}</div>
-                          <div className="text-[11px]">{c?.phone}</div>
-                        </div>
-                      </div>
-                      <span className={`absolute top-3 right-3 px-3 py-1 rounded-full text-[10px] font-black uppercase text-white shadow ${statusColors[res.status as keyof typeof statusColors] || 'bg-gray-600'}`}>{res.status}</span>
+                <div key={res.id} className="bg-white rounded-[2.5rem] shadow-lg border border-gray-100 overflow-hidden hover:shadow-2xl hover:scale-105 transition-all duration-300 flex flex-col h-full">
+                  {/* Image Header */}
+                  <div className="relative w-full h-48 bg-gray-100 overflow-hidden group">
+                    <img src={v?.mainImage} alt={v?.brand} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                    {/* Status Badge */}
+                    <span className={`absolute top-3 right-3 px-4 py-2 rounded-[1.5rem] text-[10px] font-black uppercase text-white shadow-lg ${statusColors[res.status as keyof typeof statusColors] || 'bg-gray-600'}`}>{res.status}</span>
+                    {/* Client Avatar */}
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 backdrop-blur rounded-full pr-3 shadow-lg">
+                      {c?.profilePicture ? (
+                        <img src={c.profilePicture} alt="Client" className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white flex items-center justify-center font-black text-sm">{(c?.firstName || 'C')[0]}</div>
+                      )}
+                      <span className="text-xs font-black text-gray-900 whitespace-nowrap">{c?.firstName}</span>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-5 flex flex-col flex-1">
+                    {/* Header Info */}
+                    <div className="mb-4">
+                      <div className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Réservation #{res.reservationNumber}</div>
+                      <h3 className="text-lg font-black text-gray-900 leading-tight">{v?.brand} {v?.model}</h3>
+                      <p className="text-[11px] text-gray-500 font-bold">{v?.immatriculation}</p>
                     </div>
 
-                    {/* Middle: Reservation & Vehicle info */}
-                    <div className="flex-1 p-5 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Dossier #{res.reservationNumber}</div>
-                            <h3 className="text-xl font-black text-gray-900">{v?.brand} {v?.model} <span className="text-sm text-gray-500">{v?.immatriculation}</span></h3>
-                            <div className="mt-2 text-sm text-gray-600">Lieu départ: <span className="font-bold text-gray-800">{res.pickupLocation || agencies[0]?.name || 'N/A'}</span></div>
-                            <div className="text-sm text-gray-600">Lieu retour: <span className="font-bold text-gray-800">{res.returnLocation || agencies[0]?.name || 'N/A'}</span></div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs text-gray-400">Durée</div>
-                            <div className="text-2xl font-black text-blue-600">{days}j</div>
-                            <div className="text-sm text-gray-500 mt-2">{new Date(res.startDate).toLocaleDateString('fr-FR')} → {new Date(res.endDate).toLocaleDateString('fr-FR')}</div>
-                          </div>
-                        </div>
-                        <div className="mt-4 text-sm text-gray-600 grid grid-cols-3 gap-4">
-                          <div><div className="text-[10px] font-black text-gray-400 uppercase">Total</div><div className="font-black text-lg">{res.totalAmount.toLocaleString()} DZ</div></div>
-                          <div><div className="text-[10px] font-black text-gray-400 uppercase">Payé</div><div className="font-black text-lg text-green-600">{res.paidAmount.toLocaleString()} DZ</div></div>
-                          <div><div className="text-[10px] font-black text-gray-400 uppercase">Reste</div><div className={`font-black text-lg ${rest>0? 'text-red-600':'text-green-600'}`}>{rest.toLocaleString()} DZ</div></div>
-                        </div>
+                    {/* Duration & Dates */}
+                    <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] font-black text-gray-500 uppercase">Durée</span>
+                        <span className="text-2xl font-black text-blue-600">{days}j</span>
+                      </div>
+                      <div className="text-[10px] text-gray-600 space-y-1">
+                        <div>📍 Départ: {new Date(res.startDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})}</div>
+                        <div>📍 Retour: {new Date(res.endDate).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})}</div>
+                      </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="mb-4 space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 font-bold">Total:</span>
+                        <span className="font-black text-blue-600">{res.totalAmount.toLocaleString()} DZ</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 font-bold">Payé:</span>
+                        <span className="font-black text-green-600">{res.paidAmount.toLocaleString()} DZ</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm border-t border-gray-100 pt-2">
+                        <span className="text-gray-600 font-bold">Reste:</span>
+                        <span className={`font-black text-lg ${rest>0? 'text-red-600':'text-green-600'}`}>{rest.toLocaleString()} DZ</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons - Responsive Grid */}
+                    <div className="mt-auto pt-4 border-t border-gray-100 space-y-2">
+                      {/* Primary Actions */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { setSelectedRes(res); setActiveModal('details'); }} className="px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-black hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap">🔍 Détails</button>
+                        <button onClick={() => { setSelectedRes(res); setPaymentAmount(0); setActiveModal('pay'); }} className={`px-3 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all ${rest>0 ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`} disabled={rest === 0}>💰 Payer</button>
+                      </div>
+                      
+                      {/* Status Actions */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {res.status === 'confermer' && (<button onClick={() => { setSelectedRes(res); setLogData({ mileage: v?.mileage, fuel: 'plein', location: agencies[0]?.name }); setActiveModal('activate'); }} className="px-3 py-2 bg-green-600 text-white rounded-xl text-xs font-black hover:bg-green-700 transition-all">🏁 Activer</button>)}
+                        {res.status === 'en cours' && (<button onClick={() => { setSelectedRes(res); setTermData({ mileage:(v?.mileage||0)+100, fuel:'plein', date:new Date().toISOString().slice(0,16), location:agencies[0]?.name, notes:'', extraKmCost:0, extraFuelCost:0, withTva:false }); const cust = customers.find(c=>c.id===res.customerId); const docs = (cust?.documentImages||[]).map((d:any,i:number)=>({label:`Document ${i+1}`, url:d, left:true})); setTermDocsLeft(docs); setActiveModal('terminate'); }} className="px-3 py-2 bg-orange-600 text-white rounded-xl text-xs font-black hover:bg-orange-700 transition-all col-span-2">🔒 Terminer</button>)}
+                        {res.status !== 'en cours' && res.status !== 'confermer' && (<div className="col-span-2"></div>)}
                       </div>
 
-                      {/* bottom actions inline */}
-                      <div className="mt-4 flex items-center justify-between">
-                        <div className="flex gap-2">
-                          <button onClick={() => { setSelectedRes(res); setActiveModal('details'); }} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-black hover:bg-blue-50">🔍 Détails</button>
-                          <button onClick={() => { setSelectedRes(res); setSelectedDocType('devis'); const tpl = templates?.find(t=>t.category==='devis'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } }} className="px-3 py-2 bg-purple-50 text-purple-600 rounded-xl text-sm font-black">📋 Devis</button>
-                          <button onClick={() => { setSelectedRes(res); setSelectedDocType('contrat'); const tpl = templates?.find(t=>t.category==='contract'||t.category==='contrat'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } }} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-black">📄 Contrat</button>
-                        </div>
-                        <div className="flex gap-2">
-                          {res.status === 'confermer' && (<button onClick={() => { setSelectedRes(res); setLogData({ mileage: v?.mileage, fuel: 'plein', location: agencies[0]?.name }); setActiveModal('activate'); }} className="px-3 py-2 bg-green-600 text-white rounded-xl font-black">🏁 Activer</button>)}
-                          {res.status === 'en cours' && (<button onClick={() => { setSelectedRes(res); setTermData({ mileage:(v?.mileage||0)+100, fuel:'plein', date:new Date().toISOString().slice(0,16), location:agencies[0]?.name, notes:'', extraKmCost:0, extraFuelCost:0, withTva:false }); const cust = customers.find(c=>c.id===res.customerId); const docs = (cust?.documentImages||[]).map((d:any,i:number)=>({label:`Document ${i+1}`, url:d, left:true})); setTermDocsLeft(docs); setActiveModal('terminate'); }} className="px-3 py-2 bg-orange-600 text-white rounded-xl font-black">🔒 Terminer</button>)}
-                          {rest>0 && (<button onClick={() => { setSelectedRes(res); setPaymentAmount(0); setActiveModal('pay'); }} className="px-3 py-2 bg-red-600 text-white rounded-xl font-black">💰 Payer</button>)}
-                          <button onClick={() => { setSelectedRes(res); setSelectedDocType('versement'); const tpl = templates?.find(t=>t.category==='versement'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } }} className="px-3 py-2 bg-cyan-50 text-cyan-600 rounded-xl font-black">🧾 Versement</button>
-                        </div>
+                      {/* Document Actions */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <button onClick={() => { setSelectedRes(res); setSelectedDocType('devis'); const tpl = templates?.find(t=>t.category==='devis'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } }} className="px-2 py-2 bg-purple-50 text-purple-600 rounded-lg text-[9px] font-black hover:bg-purple-600 hover:text-white transition-all">📋 Devis</button>
+                        <button onClick={() => { setSelectedRes(res); setSelectedDocType('contrat'); const tpl = templates?.find(t=>t.category==='contract'||t.category==='contrat'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } }} className="px-2 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[9px] font-black hover:bg-indigo-600 hover:text-white transition-all">📄 Contrat</button>
+                        <button onClick={() => { setSelectedRes(res); setSelectedDocType('versement'); const tpl = templates?.find(t=>t.category==='versement'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } }} className="px-2 py-2 bg-cyan-50 text-cyan-600 rounded-lg text-[9px] font-black hover:bg-cyan-600 hover:text-white transition-all">🧾 Versement</button>
                       </div>
                     </div>
                   </div>
@@ -935,7 +954,277 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                     </div>
                  </div>
                  <div className="flex gap-4">
-                    <GradientButton onClick={() => window.print()} className="!px-10 !py-4 shadow-xl">Imprimer Document</GradientButton>
+                    <GradientButton onClick={() => {
+                      if (!selectedRes || !selectedTemplate) return;
+                      
+                      const printWindow = window.open('', '_blank');
+                      if (!printWindow) return;
+                      
+                      const customer = customers.find(c => c.id === selectedRes.customerId);
+                      const vehicle = vehicles.find(v => v.id === selectedRes.vehicleId);
+                      if (!customer || !vehicle) return;
+                      
+                      // Helper to replace variables
+                      const replaceVars = (text: string): string => {
+                        const days = Math.ceil((new Date(selectedRes.endDate).getTime() - new Date(selectedRes.startDate).getTime()) / (1000 * 60 * 60 * 24));
+                        return text
+                          .replace('{{client_name}}', `${customer.firstName} ${customer.lastName}`)
+                          .replace('{{client_phone}}', customer.phone || '')
+                          .replace('{{client_email}}', customer.email || '')
+                          .replace('{{client_dob}}', customer.dateOfBirth ? new Date(customer.dateOfBirth).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR') : '')
+                          .replace('{{client_pob}}', customer.placeOfBirth || '')
+                          .replace('{{client_license}}', customer.licenseNumber || '')
+                          .replace('{{license_issued}}', customer.licenseIssueDate ? new Date(customer.licenseIssueDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR') : '')
+                          .replace('{{license_expiry}}', customer.licenseExpiryDate ? new Date(customer.licenseExpiryDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR') : '')
+                          .replace('{{license_place}}', customer.licensePlace || '')
+                          .replace('{{vehicle_brand}}', vehicle.brand)
+                          .replace('{{vehicle_model}}', vehicle.model)
+                          .replace('{{vehicle_color}}', vehicle.color || '')
+                          .replace('{{vehicle_plate}}', vehicle.immatriculation || '')
+                          .replace('{{vehicle_vin}}', vehicle.vin || '')
+                          .replace('{{vehicle_fuel}}', vehicle.fuelType || '')
+                          .replace('{{vehicle_mileage}}', vehicle.mileage?.toString() || '0')
+                          .replace('{{res_number}}', selectedRes.reservationNumber)
+                          .replace('{{res_date}}', new Date(selectedRes.startDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR'))
+                          .replace('{{start_date}}', new Date(selectedRes.startDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR'))
+                          .replace('{{end_date}}', new Date(selectedRes.endDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR'))
+                          .replace('{{duration}}', days.toString().padStart(2, '0'))
+                          .replace('{{total_amount}}', selectedRes.totalAmount.toLocaleString())
+                          .replace('{{total_ht}}', (selectedRes.totalAmount * 0.81).toLocaleString())
+                          .replace('{{unit_price}}', (selectedRes.totalAmount / days).toLocaleString())
+                          .replace('{{paid_amount}}', selectedRes.paidAmount.toLocaleString())
+                          .replace('{{remaining_amount}}', (selectedRes.totalAmount - selectedRes.paidAmount).toLocaleString())
+                          .replace('{{store_name}}', storeInfo?.name || 'DriveFlow')
+                          .replace('{{store_phone}}', storeInfo?.phone || '')
+                          .replace('{{store_email}}', storeInfo?.email || '')
+                          .replace('{{store_address}}', storeInfo?.address || '');
+                      };
+                      
+                      const htmlContent = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <meta charset="UTF-8">
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                          <title>Contrat de Location de Véhicule</title>
+                          <style>
+                            * {
+                              margin: 0;
+                              padding: 0;
+                              box-sizing: border-box;
+                            }
+                            html, body {
+                              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                              background: white;
+                              padding: 0;
+                              margin: 0;
+                            }
+                            .page {
+                              width: 210mm;
+                              height: 297mm;
+                              padding: 15mm;
+                              background: white;
+                              position: relative;
+                              page-break-after: always;
+                              overflow: hidden;
+                            }
+                            .section-header {
+                              background-color: #2563eb;
+                              color: white;
+                              padding: 8px 12px;
+                              font-weight: 900;
+                              font-size: 11px;
+                              margin-top: 8px;
+                              margin-bottom: 6px;
+                              border-radius: 3px;
+                              text-transform: uppercase;
+                              letter-spacing: 0.5px;
+                            }
+                            .section-header.purple { background-color: #7c3aed; }
+                            .section-header.green { background-color: #059669; }
+                            .section-header.red { background-color: #dc2626; }
+                            .section-header.orange { background-color: #ea580c; }
+                            .section-header.indigo { background-color: #6366f1; }
+                            
+                            .content-box {
+                              background-color: #f3f4f6;
+                              border: 1px solid #e5e7eb;
+                              padding: 8px;
+                              margin-bottom: 8px;
+                              border-radius: 3px;
+                              font-size: 9px;
+                              line-height: 1.5;
+                            }
+                            .two-column {
+                              display: grid;
+                              grid-template-columns: 1fr 1fr;
+                              gap: 10px;
+                            }
+                            .signature-box {
+                              border: 2px solid #d1d5db;
+                              padding: 10px;
+                              height: 60px;
+                              text-align: center;
+                              font-size: 8px;
+                              font-weight: 600;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                            }
+                            .logo {
+                              max-width: 80px;
+                              max-height: 40px;
+                              margin-bottom: 10px;
+                            }
+                            .title {
+                              font-size: 18px;
+                              font-weight: 900;
+                              text-align: center;
+                              margin-bottom: 10px;
+                              color: #1f2937;
+                              letter-spacing: 0.5px;
+                            }
+                            .checklist {
+                              display: grid;
+                              grid-template-columns: repeat(4, 1fr);
+                              gap: 6px;
+                              font-size: 8px;
+                            }
+                            .checklist-item {
+                              display: flex;
+                              align-items: center;
+                              gap: 3px;
+                            }
+                            .arabic-text {
+                              text-align: right;
+                              direction: rtl;
+                              font-size: 8px;
+                              line-height: 1.6;
+                            }
+                            @page {
+                              size: A4;
+                              margin: 0;
+                            }
+                            @media print {
+                              body { margin: 0; padding: 0; }
+                              .page { page-break-after: always; margin: 0; padding: 15mm; width: 100%; height: auto; }
+                              .page:last-child { page-break-after: avoid; }
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="page">
+                            <img src="${storeLogo || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%2250%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22100%22 height=%2250%22/%3E%3C/svg%3E'}" alt="Logo" class="logo">
+                            <div class="title">CONTRAT DE LOCATION DE VÉHICULE</div>
+                            <div class="two-column">
+                              <div>
+                                <div class="section-header">DÉTAILS DU CONTRAT</div>
+                                <div class="content-box">
+                                  <strong>Date du contrat:</strong> ${replaceVars('{{res_date}}')}<br>
+                                  <strong>Numéro du contrat:</strong> ${replaceVars('{{res_number}}')}<br>
+                                </div>
+                              </div>
+                              <div>
+                                <div class="section-header">PÉRIODE DE LOCATION</div>
+                                <div class="content-box">
+                                  <strong>Date de départ:</strong> ${replaceVars('{{start_date}}')}<br>
+                                  <strong>Date de retour:</strong> ${replaceVars('{{end_date}}')}<br>
+                                  <strong>Durée:</strong> ${replaceVars('{{duration}}')} jours<br>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="section-header purple">INFORMATIONS DU CONDUCTEUR (Conducteur 01)</div>
+                            <div class="content-box">
+                              <strong>Nom:</strong> ${replaceVars('{{client_name}}')}<br>
+                              <strong>Date de naissance:</strong> ${replaceVars('{{client_dob}}')}<br>
+                              <strong>Lieu de naissance:</strong> ${replaceVars('{{client_pob}}')}<br>
+                              <strong>Type de document:</strong> Permis de conduire biométrique<br>
+                              <strong>Numéro du document:</strong> ${replaceVars('{{client_license}}')}<br>
+                              <strong>Date d'émission:</strong> ${replaceVars('{{license_issued}}')}<br>
+                              <strong>Date d'expiration:</strong> ${replaceVars('{{license_expiry}}')}<br>
+                              <strong>Lieu d'émission:</strong> ${replaceVars('{{license_place}}')}<br>
+                            </div>
+                            <div class="section-header green">INFORMATIONS DU VÉHICULE</div>
+                            <div class="content-box">
+                              <strong>Modèle:</strong> ${replaceVars('{{vehicle_model}}')}<br>
+                              <strong>Couleur:</strong> ${replaceVars('{{vehicle_color}}')}<br>
+                              <strong>Immatriculation:</strong> ${replaceVars('{{vehicle_plate}}')}<br>
+                              <strong>Numéro de série:</strong> ${replaceVars('{{vehicle_vin}}')}<br>
+                              <strong>Type de carburant:</strong> ${replaceVars('{{vehicle_fuel}}')}<br>
+                              <strong>Kilométrage au départ:</strong> ${replaceVars('{{vehicle_mileage}}')} km<br>
+                            </div>
+                            <div class="section-header red">INFORMATIONS FINANCIÈRES</div>
+                            <div class="content-box" style="background-color: #fee2e2; border-color: #fca5a5;">
+                              <strong>Prix unitaire:</strong> ${replaceVars('{{unit_price}}')} DZ<br>
+                              <strong>Prix total (HT):</strong> ${replaceVars('{{total_ht}}')} DZ<br>
+                              <strong>Montant total du contrat:</strong> ${replaceVars('{{total_amount}}')} DZ<br>
+                            </div>
+                            <div class="section-header orange">LISTE DE VÉRIFICATION DE L'ÉQUIPEMENT ET DE L'INSPECTION</div>
+                            <div class="content-box">
+                              <div class="checklist">
+                                <div class="checklist-item">☐ Pneus</div>
+                                <div class="checklist-item">☐ Batterie</div>
+                                <div class="checklist-item">☐ Freins</div>
+                                <div class="checklist-item">☐ Phares</div>
+                                <div class="checklist-item">☐ Essuie-glaces</div>
+                                <div class="checklist-item">☐ Moteur</div>
+                                <div class="checklist-item">☐ Ceintures</div>
+                                <div class="checklist-item">☐ Intérieur propre</div>
+                                <div class="checklist-item">☐ Réservoir plein</div>
+                                <div class="checklist-item">☐ Fenêtres</div>
+                                <div class="checklist-item">☐ Miroirs</div>
+                                <div class="checklist-item">☐ Autres</div>
+                              </div>
+                            </div>
+                            <div class="section-header indigo">SIGNATURES</div>
+                            <div class="two-column">
+                              <div class="signature-box">
+                                <strong>Signature du locataire<br>et empreinte</strong><br><br>
+                              </div>
+                              <div class="signature-box">
+                                <strong>Signature de l'agent<br>et cachet</strong><br><br>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="page">
+                            <div class="title">CONDITIONS ET TERMES DU CONTRAT</div>
+                            <div style="background-color: #dbeafe; border: 2px solid #0ea5e9; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
+                              <strong style="font-size: 11px;">يمكنك قراءة شروط العقد في الأسفل ومصادقة عليها</strong>
+                            </div>
+                            <div class="arabic-text">
+                              <strong>1- السن:</strong> يجب أن يكون السائق يبلغ من العمر 20 عاماً على الأقل، وأن يكون حاصلاً على رخصة قيادة منذ سنتين على الأقل.<br><br>
+                              <strong>2- جواز السفر:</strong> إيداع جواز السفر البيومتري الإلزامي، بالإضافة إلى دفع تأمين ابتدائي يبدأ من 30,000.00 دج حسب فئة المركبة، ويعد هذا بمثابة ضمان لطلبه.<br><br>
+                              <strong>3- الوقود:</strong> الوقود يكون على نفقة الزبون.<br><br>
+                              <strong>4- قانون ونظام:</strong> يتم الدفع نقداً عند تسليم السيارة.<br><br>
+                              <strong>5- النظافة:</strong> تسلم السيارة نظيفة ويجب إرجاعها في نفس الحالة، وفي حال عدم ذلك، سيتم احتساب تكلفة الغسيل بمبلغ 1000 دج.<br><br>
+                              <strong>6- مكان التسليم:</strong> يتم تسليم السيارات في موقف السيارات التابع لوكالاتنا.<br><br>
+                              <strong>7- جدول المواعيد:</strong> يجب على الزبون احترام المواعيد المحددة عند الحجز، يجب الإبلاغ مسبقاً عن أي تغيير. لا يمكن للزبون تمديد مدة الإيجار إلا بعد الحصول على إذن من وكالتنا للإيجار، وذلك بإشعار مسبق لا يقل عن 48 ساعة.<br><br>
+                              <strong>8- الأضرار والخسائر:</strong> التأمين الأساسي: يلتزم الزبون بدفع جميع الأضرار التي تلحق بالمركبة سواء كان مخطئاً أو غير مخطئ. أي ضرر يلحق بالمركبة سيؤدي إلى خصم من مبلغ الضمان.<br><br>
+                              <strong>9- عند السرقة:</strong> في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطني قبل أي تصريح، يجب على الزبون إبلاغ وكالة الكراء بشكل إلزامي.<br><br>
+                              <strong>10- تأمين:</strong> يستفيد من التأمين فقط السائقون المذكورون في عقد الكراء، يُمنع منعاً باتاً إعارة أو تأجير المركبة من الباطن، وتكون جميع الأضرار الناتجة عن مثل هذه الحالات على عاتق الزبون بالكامل.<br><br>
+                              <strong>11- عطل ميكانيكي:</strong> خلال فترة الإيجار، وبناءً على عدد الكيلومترات المقطوعة، يجب على الزبون إجراء الفحوصات اللازمة مثل مستوى الزيت، حالة المحرك، ضغط الإطارات. في حال حدوث عطل ميكانيكي بسبب إهمال الزبون، فإن تكاليف الإصلاح والصيانة تكون على عاتق الزبون بالكامل.<br><br>
+                              <strong>12- خسائر إضافية:</strong> الأضرار التي تلحق بالعجلات والإطارات، القيادة بالإطارات المفرغة من الهواء، التدهور، السرقة، نهب الملحقات، أعمال التخريب، كلها سيتم تحميل تكلفتها على الزبون.<br><br>
+                              <strong>13- ضريبة التأخير:</strong> مدة الإيجار تُحتسب على فترات كاملة مدتها 24 ساعة غير قابلة للتقسيم. يجب على الزبون إعادة المركبة في نفس الوقت، وإلا سيتم احتساب تكلفة تأخير مقدارها 800 دينار لكل ساعة تأخير.<br><br>
+                              <strong>14- عدد الأميال:</strong> عدد الكيلومترات محدود بـ 300 كم يومياً، ويفرض غرامة قدرها 30 دج عن كل كيلومتر زائد.<br><br>
+                              <strong>15- شروط:</strong> يقر الزبون بأنه اطلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.<br>
+                            </div>
+                            <div class="section-header indigo">الموافقة والتوقيع</div>
+                            <div class="signature-box" style="text-align: center;">
+                              <strong>امضاء وبصمة الزبون<br>Signature et Empreinte du Client</strong><br><br>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                      `;
+                      
+                      printWindow.document.write(htmlContent);
+                      printWindow.document.close();
+                      
+                      setTimeout(() => {
+                        printWindow.focus();
+                        printWindow.print();
+                      }, 500);
+                    }} className="!px-10 !py-4 shadow-xl">Imprimer Document</GradientButton>
                     <button onClick={() => setActiveModal(null)} className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm hover:text-red-500 transition-all">✕</button>
                  </div>
               </div>

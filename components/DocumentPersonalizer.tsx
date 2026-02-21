@@ -35,7 +35,8 @@ interface DocumentPersonalizerProps {
   reservation: Reservation;
   customer: Customer;
   vehicle: Vehicle;
-  docType: 'devis' | 'contrat' | 'versement' | 'facture';
+  // allow inspection doc types like 'checkin' and 'checkout'
+  docType: string;
   initialTemplate?: DocumentTemplate;
   onSaveTemplate?: (template: DocumentTemplate) => void;
   onClose?: () => void;
@@ -104,16 +105,32 @@ const DocumentPersonalizer: React.FC<DocumentPersonalizerProps> = ({
   const selectedElement = template.elements.find((el) => el.id === selectedElementId);
 
   const replaceVariables = (text: string): string => {
+    const days = Math.ceil((new Date(reservation.endDate).getTime() - new Date(reservation.startDate).getTime()) / (1000 * 60 * 60 * 24));
     return text
       .replace('{{client_name}}', `${customer.firstName} ${customer.lastName}`)
       .replace('{{client_phone}}', customer.phone || '')
       .replace('{{client_email}}', customer.email || '')
+      .replace('{{client_dob}}', customer.dateOfBirth ? new Date(customer.dateOfBirth).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR') : '')
+      .replace('{{client_pob}}', customer.placeOfBirth || '')
+      .replace('{{client_license}}', customer.licenseNumber || '')
+      .replace('{{license_issued}}', customer.licenseIssueDate ? new Date(customer.licenseIssueDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR') : '')
+      .replace('{{license_expiry}}', customer.licenseExpiryDate ? new Date(customer.licenseExpiryDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR') : '')
+      .replace('{{license_place}}', customer.licensePlace || '')
       .replace('{{vehicle_brand}}', vehicle.brand)
       .replace('{{vehicle_model}}', vehicle.model)
+      .replace('{{vehicle_color}}', vehicle.color || '')
       .replace('{{vehicle_plate}}', vehicle.immatriculation || '')
+      .replace('{{vehicle_vin}}', vehicle.vin || '')
+      .replace('{{vehicle_fuel}}', vehicle.fuelType || '')
+      .replace('{{vehicle_mileage}}', vehicle.mileage?.toString() || '0')
       .replace('{{res_number}}', reservation.reservationNumber)
       .replace('{{res_date}}', new Date(reservation.startDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR'))
+      .replace('{{start_date}}', new Date(reservation.startDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR'))
+      .replace('{{end_date}}', new Date(reservation.endDate).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'fr-FR'))
+      .replace('{{duration}}', days.toString().padStart(2, '0'))
       .replace('{{total_amount}}', reservation.totalAmount.toLocaleString())
+      .replace('{{total_ht}}', (reservation.totalAmount * 0.81).toLocaleString())
+      .replace('{{unit_price}}', (reservation.totalAmount / days).toLocaleString())
       .replace('{{paid_amount}}', reservation.paidAmount.toLocaleString())
       .replace('{{remaining_amount}}', (reservation.totalAmount - reservation.paidAmount).toLocaleString())
       .replace('{{store_name}}', storeInfo?.name || 'DriveFlow')
@@ -429,7 +446,300 @@ const DocumentPersonalizer: React.FC<DocumentPersonalizerProps> = ({
               </GradientButton>
             )}
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                if (!canvasRef.current) return;
+                
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) return;
+                
+                // Extract all elements from the canvas
+                const elements = template.elements;
+                
+                // Build the HTML content with proper styling
+                const htmlContent = `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Contrat de Location de Véhicule</title>
+                    <style>
+                      * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                      }
+                      html, body {
+                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        background: white;
+                        padding: 0;
+                        margin: 0;
+                      }
+                      .page {
+                        width: 210mm;
+                        height: 297mm;
+                        padding: 15mm;
+                        background: white;
+                        position: relative;
+                        page-break-after: always;
+                        overflow: hidden;
+                      }
+                      .section-header {
+                        background-color: #2563eb;
+                        color: white;
+                        padding: 8px 12px;
+                        font-weight: 900;
+                        font-size: 11px;
+                        margin-top: 8px;
+                        margin-bottom: 6px;
+                        border-radius: 3px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                      }
+                      .section-header.purple { background-color: #7c3aed; }
+                      .section-header.green { background-color: #059669; }
+                      .section-header.red { background-color: #dc2626; }
+                      .section-header.orange { background-color: #ea580c; }
+                      .section-header.indigo { background-color: #6366f1; }
+                      
+                      .content-box {
+                        background-color: #f3f4f6;
+                        border: 1px solid #e5e7eb;
+                        padding: 8px;
+                        margin-bottom: 8px;
+                        border-radius: 3px;
+                        font-size: 9px;
+                        line-height: 1.5;
+                      }
+                      .two-column {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 10px;
+                      }
+                      .signature-box {
+                        border: 2px solid #d1d5db;
+                        padding: 10px;
+                        height: 60px;
+                        text-align: center;
+                        font-size: 8px;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                      }
+                      .logo {
+                        max-width: 80px;
+                        max-height: 40px;
+                        margin-bottom: 10px;
+                      }
+                      .title {
+                        font-size: 18px;
+                        font-weight: 900;
+                        text-align: center;
+                        margin-bottom: 10px;
+                        color: #1f2937;
+                        letter-spacing: 0.5px;
+                      }
+                      .subtitle {
+                        font-size: 14px;
+                        font-weight: 900;
+                        color: #1f2937;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.3px;
+                      }
+                      table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 9px;
+                      }
+                      td, th {
+                        border: 1px solid #e5e7eb;
+                        padding: 4px;
+                        text-align: left;
+                      }
+                      th {
+                        background-color: #f3f4f6;
+                        font-weight: 600;
+                      }
+                      .checklist {
+                        display: grid;
+                        grid-template-columns: repeat(4, 1fr);
+                        gap: 6px;
+                        font-size: 8px;
+                      }
+                      .checklist-item {
+                        display: flex;
+                        align-items: center;
+                        gap: 3px;
+                      }
+                      .arabic-text {
+                        text-align: right;
+                        direction: rtl;
+                        font-size: 8px;
+                        line-height: 1.6;
+                      }
+                      @page {
+                        size: A4;
+                        margin: 0;
+                      }
+                      @media print {
+                        body {
+                          margin: 0;
+                          padding: 0;
+                        }
+                        .page {
+                          page-break-after: always;
+                          margin: 0;
+                          padding: 20mm;
+                          width: 100%;
+                          height: auto;
+                        }
+                        .page:last-child {
+                          page-break-after: avoid;
+                        }
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    <!-- PAGE 1 -->
+                    <div class="page">
+                      <img src="${storeLogo || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%2250%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22100%22 height=%2250%22/%3E%3C/svg%3E'}" alt="Logo" class="logo">
+                      
+                      <div class="title">CONTRAT DE LOCATION DE VÉHICULE</div>
+                      
+                      <div class="two-column">
+                        <div>
+                          <div class="section-header">DÉTAILS DU CONTRAT</div>
+                          <div class="content-box">
+                            <strong>Date du contrat:</strong> ${replaceVariables('{{res_date}}')}<br>
+                            <strong>Numéro du contrat:</strong> ${replaceVariables('{{res_number}}')}<br>
+                          </div>
+                        </div>
+                        <div>
+                          <div class="section-header">PÉRIODE DE LOCATION</div>
+                          <div class="content-box">
+                            <strong>Date de départ:</strong> ${replaceVariables('{{start_date}}')}<br>
+                            <strong>Date de retour:</strong> ${replaceVariables('{{end_date}}')}<br>
+                            <strong>Durée:</strong> ${replaceVariables('{{duration}}')} jours<br>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="section-header purple">INFORMATIONS DU CONDUCTEUR (Conducteur 01)</div>
+                      <div class="content-box">
+                        <strong>Nom:</strong> ${replaceVariables('{{client_name}}')}<br>
+                        <strong>Date de naissance:</strong> ${replaceVariables('{{client_dob}}')}<br>
+                        <strong>Lieu de naissance:</strong> ${replaceVariables('{{client_pob}}')}<br>
+                        <strong>Type de document:</strong> Permis de conduire biométrique<br>
+                        <strong>Numéro du document:</strong> ${replaceVariables('{{client_license}}')}<br>
+                        <strong>Date d'émission:</strong> ${replaceVariables('{{license_issued}}')}<br>
+                        <strong>Date d'expiration:</strong> ${replaceVariables('{{license_expiry}}')}<br>
+                        <strong>Lieu d'émission:</strong> ${replaceVariables('{{license_place}}')}<br>
+                      </div>
+                      
+                      <div class="section-header green">INFORMATIONS DU VÉHICULE</div>
+                      <div class="content-box">
+                        <strong>Modèle:</strong> ${replaceVariables('{{vehicle_model}}')}<br>
+                        <strong>Couleur:</strong> ${replaceVariables('{{vehicle_color}}')}<br>
+                        <strong>Immatriculation:</strong> ${replaceVariables('{{vehicle_plate}}')}<br>
+                        <strong>Numéro de série:</strong> ${replaceVariables('{{vehicle_vin}}')}<br>
+                        <strong>Type de carburant:</strong> ${replaceVariables('{{vehicle_fuel}}')}<br>
+                        <strong>Kilométrage au départ:</strong> ${replaceVariables('{{vehicle_mileage}}')} km<br>
+                      </div>
+                      
+                      <div class="section-header red">INFORMATIONS FINANCIÈRES</div>
+                      <div class="content-box" style="background-color: #fee2e2; border-color: #fca5a5;">
+                        <strong>Prix unitaire:</strong> ${replaceVariables('{{unit_price}}')} DZ<br>
+                        <strong>Prix total (HT):</strong> ${replaceVariables('{{total_ht}}')} DZ<br>
+                        <strong>Montant total du contrat:</strong> ${replaceVariables('{{total_amount}}')} DZ<br>
+                      </div>
+                      
+                      <div class="section-header orange">LISTE DE VÉRIFICATION DE L'ÉQUIPEMENT ET DE L'INSPECTION</div>
+                      <div class="content-box">
+                        <div class="checklist">
+                          <div class="checklist-item">☐ Pneus</div>
+                          <div class="checklist-item">☐ Batterie</div>
+                          <div class="checklist-item">☐ Freins</div>
+                          <div class="checklist-item">☐ Phares</div>
+                          <div class="checklist-item">☐ Essuie-glaces</div>
+                          <div class="checklist-item">☐ Moteur</div>
+                          <div class="checklist-item">☐ Ceintures</div>
+                          <div class="checklist-item">☐ Intérieur propre</div>
+                          <div class="checklist-item">☐ Réservoir plein</div>
+                          <div class="checklist-item">☐ Fenêtres</div>
+                          <div class="checklist-item">☐ Miroirs</div>
+                          <div class="checklist-item">☐ Autres</div>
+                        </div>
+                      </div>
+                      
+                      <div class="section-header indigo">SIGNATURES</div>
+                      <div class="two-column">
+                        <div class="signature-box">
+                          <strong>Signature du locataire<br>et empreinte</strong><br><br>
+                        </div>
+                        <div class="signature-box">
+                          <strong>Signature de l'agent<br>et cachet</strong><br><br>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- PAGE 2 -->
+                    <div class="page">
+                      <div class="title">CONDITIONS ET TERMES DU CONTRAT</div>
+                      <div style="background-color: #dbeafe; border: 2px solid #0ea5e9; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
+                        <strong style="font-size: 11px;">يمكنك قراءة شروط العقد في الأسفل ومصادقة عليها</strong>
+                      </div>
+                      
+                      <div class="arabic-text">
+                        <strong>1- السن:</strong> يجب أن يكون السائق يبلغ من العمر 20 عاماً على الأقل، وأن يكون حاصلاً على رخصة قيادة منذ سنتين على الأقل.<br><br>
+                        
+                        <strong>2- جواز السفر:</strong> إيداع جواز السفر البيومتري الإلزامي، بالإضافة إلى دفع تأمين ابتدائي يبدأ من 30,000.00 دج حسب فئة المركبة، ويعد هذا بمثابة ضمان لطلبه.<br><br>
+                        
+                        <strong>3- الوقود:</strong> الوقود يكون على نفقة الزبون.<br><br>
+                        
+                        <strong>4- قانون ونظام:</strong> يتم الدفع نقداً عند تسليم السيارة.<br><br>
+                        
+                        <strong>5- النظافة:</strong> تسلم السيارة نظيفة ويجب إرجاعها في نفس الحالة، وفي حال عدم ذلك، سيتم احتساب تكلفة الغسيل بمبلغ 1000 دج.<br><br>
+                        
+                        <strong>6- مكان التسليم:</strong> يتم تسليم السيارات في موقف السيارات التابع لوكالاتنا.<br><br>
+                        
+                        <strong>7- جدول المواعيد:</strong> يجب على الزبون احترام المواعيد المحددة عند الحجز، يجب الإبلاغ مسبقاً عن أي تغيير. لا يمكن للزبون تمديد مدة الإيجار إلا بعد الحصول على إذن من وكالتنا للإيجار، وذلك بإشعار مسبق لا يقل عن 48 ساعة.<br><br>
+                        
+                        <strong>8- الأضرار والخسائر:</strong> التأمين الأساسي: يلتزم الزبون بدفع جميع الأضرار التي تلحق بالمركبة سواء كان مخطئاً أو غير مخطئ. أي ضرر يلحق بالمركبة سيؤدي إلى خصم من مبلغ الضمان.<br><br>
+                        
+                        <strong>9- عند السرقة:</strong> في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطني قبل أي تصريح، يجب على الزبون إبلاغ وكالة الكراء بشكل إلزامي.<br><br>
+                        
+                        <strong>10- تأمين:</strong> يستفيد من التأمين فقط السائقون المذكورون في عقد الكراء، يُمنع منعاً باتاً إعارة أو تأجير المركبة من الباطن، وتكون جميع الأضرار الناتجة عن مثل هذه الحالات على عاتق الزبون بالكامل.<br><br>
+                        
+                        <strong>11- عطل ميكانيكي:</strong> خلال فترة الإيجار، وبناءً على عدد الكيلومترات المقطوعة، يجب على الزبون إجراء الفحوصات اللازمة مثل مستوى الزيت، حالة المحرك، ضغط الإطارات. في حال حدوث عطل ميكانيكي بسبب إهمال الزبون، فإن تكاليف الإصلاح والصيانة تكون على عاتق الزبون بالكامل.<br><br>
+                        
+                        <strong>12- خسائر إضافية:</strong> الأضرار التي تلحق بالعجلات والإطارات، القيادة بالإطارات المفرغة من الهواء، التدهور، السرقة، نهب الملحقات، أعمال التخريب، كلها سيتم تحميل تكلفتها على الزبون.<br><br>
+                        
+                        <strong>13- ضريبة التأخير:</strong> مدة الإيجار تُحتسب على فترات كاملة مدتها 24 ساعة غير قابلة للتقسيم. يجب على الزبون إعادة المركبة في نفس الوقت، وإلا سيتم احتساب تكلفة تأخير مقدارها 800 دينار لكل ساعة تأخير.<br><br>
+                        
+                        <strong>14- عدد الأميال:</strong> عدد الكيلومترات محدود بـ 300 كم يومياً، ويفرض غرامة قدرها 30 دج عن كل كيلومتر زائد.<br><br>
+                        
+                        <strong>15- شروط:</strong> يقر الزبون بأنه اطلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.<br>
+                      </div>
+                      
+                      <div class="section-header indigo">الموافقة والتوقيع</div>
+                      <div class="signature-box" style="text-align: center;">
+                        <strong>امضاء وبصمة الزبون<br>Signature et Empreinte du Client</strong><br><br>
+                      </div>
+                    </div>
+                  </body>
+                  </html>
+                `;
+                
+                printWindow.document.write(htmlContent);
+                printWindow.document.close();
+                
+                setTimeout(() => {
+                  printWindow.focus();
+                  printWindow.print();
+                }, 500);
+              }}
               className="w-full px-6 py-3 bg-green-600 text-white font-black rounded-2xl hover:bg-green-700 transition-all shadow-lg"
             >
               🖨️ {t.print}
@@ -464,13 +774,105 @@ function getDefaultElements(docType: string, lang: Language): PersonalizableElem
       { id: '8', type: 'signature', content: 'Cachet et signature du vendeur', x: 50, y: 600, width: 250, height: 150, fontSize: 10, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
     ],
     contrat: [
-      { id: '1', type: 'logo', content: 'LOGO', x: 50, y: 30, width: 100, height: 60, fontSize: 12, color: '#111827', fontFamily: 'Inter', fontWeight: '700', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
-      { id: '2', type: 'text', content: 'CONTRAT DE LOCATION', x: 200, y: 50, width: 400, height: 50, fontSize: 28, color: '#1f2937', fontFamily: 'Inter', fontWeight: '900', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
-      { id: '3', type: 'text', content: 'Locataire: {{client_name}}\nTéléphone: {{client_phone}}\nEmail: {{client_email}}', x: 50, y: 150, width: 350, height: 100, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
-      { id: '4', type: 'text', content: 'Véhicule: {{vehicle_brand}} {{vehicle_model}}\nImmatriculation: {{vehicle_plate}}\nRéservation: {{res_number}}\nDate: {{res_date}}', x: 450, y: 150, width: 300, height: 100, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
-      { id: '5', type: 'text', content: 'CONDITIONS ET TERMES:\n\n1. Le locataire accepte de louer le véhicule mentionné ci-dessus\n2. Le conducteur accepte les conditions de sécurité\n3. Le paiement se fait avant la location\n4. Les dégâts doivent être signalés immédiatement', x: 50, y: 280, width: 700, height: 200, fontSize: 9, color: '#1f2937', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
-      { id: '6', type: 'signature', content: 'Signature du locataire', x: 50, y: 520, width: 300, height: 80, fontSize: 10, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
-      { id: '7', type: 'signature', content: 'Signature de l\'agent', x: 450, y: 520, width: 300, height: 80, fontSize: 10, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
+      // PAGE 1 HEADER
+      { id: '1', type: 'logo', content: 'LOGO', x: 50, y: 20, width: 100, height: 50, fontSize: 12, color: '#111827', fontFamily: 'Inter', fontWeight: '700', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: '2', type: 'text', content: 'CONTRAT DE LOCATION DE VÉHICULE', x: 200, y: 30, width: 550, height: 40, fontSize: 22, color: '#1f2937', fontFamily: 'Inter', fontWeight: '900', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      
+      // CONTRACT DETAILS SECTION
+      { id: '3', type: 'text', content: 'DÉTAILS DU CONTRAT', x: 50, y: 80, width: 700, height: 25, fontSize: 12, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#2563eb', borderColor: '#2563eb', borderWidth: 0, opacity: 1 },
+      { id: '4', type: 'text', content: 'Date du contrat: {{res_date}}\nNuméro du contrat: {{res_number}}', x: 50, y: 110, width: 350, height: 60, fontSize: 10, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
+      
+      // RENTAL PERIOD SECTION
+      { id: '5', type: 'text', content: 'PÉRIODE DE LOCATION', x: 420, y: 80, width: 330, height: 25, fontSize: 12, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#2563eb', borderColor: '#2563eb', borderWidth: 0, opacity: 1 },
+      { id: '6', type: 'text', content: 'Date de départ: {{start_date}}\nDate de retour: {{end_date}}\nDurée: {{duration}} jours', x: 420, y: 110, width: 330, height: 60, fontSize: 10, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
+      
+      // DRIVER INFORMATION SECTION
+      { id: '7', type: 'text', content: 'INFORMATIONS DU CONDUCTEUR (Conducteur 01)', x: 50, y: 185, width: 700, height: 25, fontSize: 12, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#7c3aed', borderColor: '#7c3aed', borderWidth: 0, opacity: 1 },
+      { id: '8', type: 'text', content: 'Nom: {{client_name}}\nDate de naissance: {{client_dob}}\nLieu de naissance: {{client_pob}}\nType de document: Permis de conduire biométrique\nNuméro du document: {{client_license}}\nDate d\'émission: {{license_issued}}\nDate d\'expiration: {{license_expiry}}\nLieu d\'émission: {{license_place}}', x: 50, y: 215, width: 700, height: 130, fontSize: 9, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
+      
+      // VEHICLE INFORMATION SECTION
+      { id: '9', type: 'text', content: 'INFORMATIONS DU VÉHICULE', x: 50, y: 360, width: 700, height: 25, fontSize: 12, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#059669', borderColor: '#059669', borderWidth: 0, opacity: 1 },
+      { id: '10', type: 'text', content: 'Modèle: {{vehicle_model}}\nCouleur: {{vehicle_color}}\nImmatriculation: {{vehicle_plate}}\nNuméro de série: {{vehicle_vin}}\nType de carburant: {{vehicle_fuel}}\nKilométrage au départ: {{vehicle_mileage}} km', x: 50, y: 390, width: 700, height: 100, fontSize: 9, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
+      
+      // FINANCIAL INFORMATION SECTION
+      { id: '11', type: 'text', content: 'INFORMATIONS FINANCIÈRES', x: 50, y: 505, width: 700, height: 25, fontSize: 12, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#dc2626', borderColor: '#dc2626', borderWidth: 0, opacity: 1 },
+      { id: '12', type: 'text', content: 'Prix unitaire: {{unit_price}} DZ\nPrix total (HT): {{total_ht}} DZ\nMontant total du contrat: {{total_amount}} DZ', x: 50, y: 535, width: 700, height: 75, fontSize: 10, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: '#fee2e2', borderColor: '#fca5a5', borderWidth: 1, opacity: 1 },
+      
+      // CHECKLIST HEADER
+      { id: '13', type: 'text', content: 'LISTE DE VÉRIFICATION DE L\'ÉQUIPEMENT ET DE L\'INSPECTION', x: 50, y: 625, width: 700, height: 25, fontSize: 11, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#ea580c', borderColor: '#ea580c', borderWidth: 0, opacity: 1 },
+      { id: '14', type: 'checklist', content: '☐ Pneus | ☐ Batterie | ☐ Freins | ☐ Phares | ☐ Essuie-glaces | ☐ Moteur\n☐ Ceintures | ☐ Intérieur propre | ☐ Réservoir plein | ☐ Fenêtres | ☐ Miroirs | ☐ Autres', x: 50, y: 655, width: 700, height: 80, fontSize: 9, color: '#374151', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      
+      // SIGNATURES SECTION PAGE 1
+      { id: '15', type: 'text', content: 'SIGNATURES', x: 50, y: 750, width: 700, height: 20, fontSize: 11, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'left', backgroundColor: '#6366f1', borderColor: '#6366f1', borderWidth: 0, opacity: 1 },
+      { id: '16', type: 'signature', content: 'Signature du locataire\net empreinte', x: 50, y: 780, width: 320, height: 100, fontSize: 9, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
+      { id: '17', type: 'signature', content: 'Signature de l\'agent\net cachet', x: 430, y: 780, width: 320, height: 100, fontSize: 9, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
+      
+      // PAGE 2 - HEADER
+      { id: '18', type: 'text', content: 'PAGE 2 - CONDITIONS ET TERMES DU CONTRAT', x: 50, y: 900, width: 700, height: 30, fontSize: 16, color: '#1f2937', fontFamily: 'Inter', fontWeight: '900', textAlign: 'center', backgroundColor: '#dbeafe', borderColor: '#0ea5e9', borderWidth: 2, opacity: 1 },
+      
+      // ARABIC TERMS SECTION
+      { id: '19', type: 'text', content: 'يمكنك قراءة شروط العقد في الأسفل ومصادقة عليها\n\n1- السن: يجب أن يكون السائق يبلغ من العمر 20 عاماً على الأقل، وأن يكون حاصلاً على رخصة قيادة منذ سنتين على الأقل.\n\n2- جواز السفر: إيداع جواز السفر البيومتري الإلزامي، بالإضافة إلى دفع تأمين ابتدائي يبدأ من 30,000.00 دج حسب فئة المركبة، ويعد هذا بمثابة ضمان لطلبه.\n\n3- الوقود: الوقود يكون على نفقة الزبون.\n\n4- قانون ونظام: يتم الدفع نقداً عند تسليم السيارة.\n\n5- النظافة: تسلم السيارة نظيفة ويجب إرجاعها في نفس الحالة، وفي حال عدم ذلك، سيتم احتساب تكلفة الغسيل بمبلغ 1000 دج.', x: 50, y: 940, width: 700, height: 200, fontSize: 8, color: '#1f2937', fontFamily: 'Inter', fontWeight: '400', textAlign: 'right', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      
+      { id: '20', type: 'text', content: '6- مكان التسليم: يتم تسليم السيارات في موقف السيارات التابع لوكالاتنا.\n\n7- جدول المواعيد: يجب على الزبون احترام المواعيد المحددة عند الحجز، يجب الإبلاغ مسبقاً عن أي تغيير. لا يمكن للزبون تمديد مدة الإيجار إلا بعد الحصول على إذن من وكالتنا للإيجار، وذلك بإشعار مسبق لا يقل عن 48 ساعة.\n\n8- الأضرار والخسائر: التأمين الأساسي: يلتزم الزبون بدفع جميع الأضرار التي تلحق بالمركبة سواء كان مخطئاً أو غير مخطئ. أي ضرر يلحق بالمركبة سيؤدي إلى خصم من مبلغ الضمان.\n\n9- عند السرقة: في حالة السرقة أو تضرر المركبة، يجب تقديم تصريح لدى مصالح الشرطة أو الدرك الوطني قبل أي تصريح، يجب على الزبون إبلاغ وكالة الكراء بشكل إلزامي.', x: 50, y: 1150, width: 700, height: 200, fontSize: 8, color: '#1f2937', fontFamily: 'Inter', fontWeight: '400', textAlign: 'right', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      
+      { id: '21', type: 'text', content: '10- تأمين: يستفيد من التأمين فقط السائقون المذكورون في عقد الكراء، يُمنع منعاً باتاً إعارة أو تأجير المركبة من الباطن، وتكون جميع الأضرار الناتجة عن مثل هذه الحالات على عاتق الزبون بالكامل.\n\n11- عطل ميكانيكي: خلال فترة الإيجار، وبناءً على عدد الكيلومترات المقطوعة، يجب على الزبون إجراء الفحوصات اللازمة مثل مستوى الزيت، حالة المحرك، ضغط الإطارات، وغيرها في حال حدوث عطل ميكانيكي بسبب إهمال الزبون في إجراء هذه الفحوصات أو لأي سبب آخر ناتج عن مسؤولية الزبون (مثلاً: كسر حوض الزيت، العارضة السفلية، القفل أو غيرها)، فإن تكاليف الإصلاح والصيانة تكون على عاتق الزبون بالكامل.\n\n12- خسائر إضافية: الأضرار التي تلحق بالعجلات والإطارات، القيادة بالإطارات المفرغة من الهواء، التدهور، السرقة، نهب الملحقات، أعمال التخريب، الأضرار الميكانيكية الناتجة عن سوء استخدام المركبة، الأضرار التي تحدث أسفل المركبة (الصدام الأمامي، الجوانب، حوض الزيت، العادم) والأضرار الناتجة عن الاضطرابات والشغب، كلها سيتم تحميل تكلفتها على الزبون.', x: 50, y: 1360, width: 700, height: 200, fontSize: 8, color: '#1f2937', fontFamily: 'Inter', fontWeight: '400', textAlign: 'right', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      
+      { id: '22', type: 'text', content: '13- ضريبة التأخير: مدة الإيجار تُحتسب على فترات كاملة مدتها 24 ساعة غير قابلة للتقسيم، بدءاً من وقت حجز المركبة وحتى الوقت المذكور في العقد، يجب على الزبون إعادة المركبة في نفس الوقت، وإلا سيتم احتساب تكلفة تأخير مقدارها 800 دينار لكل ساعة تأخير.\n\n14- عدد الأميال: عدد الكيلومترات محدود لجميع مركباتنا بـ 300 كم يومياً، ويفرض غرامة قدرها 30 دج عن كل كيلومتر زائد.\n\n15- شروط: يقر الزبون بأنه اطلع على شروط الإيجار هذه وقبلها دون أي تحفظ، ويتعهد بتوقيع هذا العقد.', x: 50, y: 1570, width: 700, height: 150, fontSize: 8, color: '#1f2937', fontFamily: 'Inter', fontWeight: '400', textAlign: 'right', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      
+      // PAGE 2 FOOTER WITH SIGNATURE
+      { id: '23', type: 'text', content: 'الموافقة والتوقيع', x: 50, y: 1730, width: 700, height: 25, fontSize: 12, color: '#fff', fontFamily: 'Inter', fontWeight: '900', textAlign: 'center', backgroundColor: '#6366f1', borderColor: '#6366f1', borderWidth: 0, opacity: 1 },
+      { id: '24', type: 'signature', content: 'امضاء وبصمة الزبون\nSignature et Empreinte du Client', x: 50, y: 1765, width: 650, height: 100, fontSize: 10, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 2, opacity: 1 },
+    ],
+    // Inspection templates for check-in / check-out (historique des inspections)
+    checkin: [
+      { id: 'i1', type: 'text', content: "RAPPORT D'INSPECTION - CHECK-IN", x: 50, y: 20, width: 700, height: 40, fontSize: 20, color: '#111827', fontFamily: 'Inter', fontWeight: '900', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'i2', type: 'text', content: 'Dossier: {{res_number}}\nDate inspection: {{res_date}}\nType: Check-in', x: 50, y: 80, width: 700, height: 60, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
+      { id: 'i3', type: 'text', content: 'Client:\n{{client_name}}\n{{client_phone}}\n{{client_email}}', x: 50, y: 150, width: 340, height: 80, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'i4', type: 'text', content: 'INFORMATIONS DU VÉHICULE\nModèle: {{vehicle_brand}} {{vehicle_model}}\nCouleur: {{vehicle_color}}\nImmatriculation: {{vehicle_plate}}\nKilométrage: {{vehicle_mileage}} km', x: 410, y: 150, width: 340, height: 120, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'i5', type: 'checklist', content: JSON.stringify([
+        { label: 'Feux & Phares', checked: false },
+        { label: 'Pneus (Usure/Pression)', checked: false },
+        { label: 'Freins', checked: false },
+        { label: 'Essuie-glaces', checked: false },
+        { label: 'Rétroviseurs', checked: false },
+        { label: 'Ceintures', checked: false },
+        { label: 'Klaxon', checked: false },
+        { label: 'Roue de secours', checked: false },
+        { label: 'Cric', checked: false },
+        { label: 'Triangles', checked: false },
+        { label: 'Trousse secours', checked: false },
+        { label: 'Docs véhicule', checked: false },
+        { label: 'Climatisation (A/C)', checked: false },
+        { label: 'Intérieur Propre', checked: false },
+        { label: 'Extérieur Propre', checked: false }
+      ]), x: 50, y: 290, width: 700, height: 260, fontSize: 12, color: '#111827', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'i6', type: 'signature', content: 'Signature client', x: 50, y: 930, width: 320, height: 100, fontSize: 11, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
+      { id: 'i7', type: 'signature', content: 'Signature agent / Cacher', x: 380, y: 930, width: 320, height: 100, fontSize: 11, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 }
+    ],
+    checkout: [
+      { id: 'o1', type: 'text', content: "RAPPORT D'INSPECTION - CHECK-OUT", x: 50, y: 20, width: 700, height: 40, fontSize: 20, color: '#111827', fontFamily: 'Inter', fontWeight: '900', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'o2', type: 'text', content: 'Dossier: {{res_number}}\nDate inspection: {{res_date}}\nType: Check-out', x: 50, y: 80, width: 700, height: 60, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', borderWidth: 1, opacity: 1 },
+      { id: 'o3', type: 'text', content: 'Client:\n{{client_name}}\n{{client_phone}}\n{{client_email}}', x: 50, y: 150, width: 340, height: 80, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'o4', type: 'text', content: 'INFORMATIONS DU VÉHICULE\nModèle: {{vehicle_brand}} {{vehicle_model}}\nCouleur: {{vehicle_color}}\nImmatriculation: {{vehicle_plate}}\nKilométrage: {{vehicle_mileage}} km', x: 410, y: 150, width: 340, height: 120, fontSize: 11, color: '#374151', fontFamily: 'Inter', fontWeight: '600', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'o5', type: 'checklist', content: JSON.stringify([
+        { label: 'Feux & Phares', checked: false },
+        { label: 'Pneus (Usure/Pression)', checked: false },
+        { label: 'Freins', checked: false },
+        { label: 'Essuie-glaces', checked: false },
+        { label: 'Rétroviseurs', checked: false },
+        { label: 'Ceintures', checked: false },
+        { label: 'Klaxon', checked: false },
+        { label: 'Roue de secours', checked: false },
+        { label: 'Cric', checked: false },
+        { label: 'Triangles', checked: false },
+        { label: 'Trousse secours', checked: false },
+        { label: 'Docs véhicule', checked: false },
+        { label: 'Climatisation (A/C)', checked: false },
+        { label: 'Intérieur Propre', checked: false },
+        { label: 'Extérieur Propre', checked: false }
+      ]), x: 50, y: 290, width: 700, height: 260, fontSize: 12, color: '#111827', fontFamily: 'Inter', fontWeight: '400', textAlign: 'left', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },
+      { id: 'o6', type: 'signature', content: 'Signature client', x: 50, y: 930, width: 320, height: 100, fontSize: 11, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 },
+      { id: 'o7', type: 'signature', content: 'Signature agent / Cacher', x: 380, y: 930, width: 320, height: 100, fontSize: 11, color: '#6b7280', fontFamily: 'Inter', fontWeight: '400', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#d1d5db', borderWidth: 1, opacity: 1 }
     ],
     versement: [
       { id: '1', type: 'logo', content: 'LOGO', x: 50, y: 30, width: 100, height: 60, fontSize: 12, color: '#111827', fontFamily: 'Inter', fontWeight: '700', textAlign: 'center', backgroundColor: 'transparent', borderColor: '#e5e7eb', borderWidth: 0, opacity: 1 },

@@ -83,14 +83,148 @@ const BillingPage: React.FC<BillingPageProps> = ({ lang, customers, vehicles, te
   const replaceVariables = (content: string, res: Reservation) => {
     const client = customers.find(c => c.id === res.customerId);
     const vehicle = vehicles.find(v => v.id === res.vehicleId);
-    return content
-      .replace('{{client_name}}', `${client?.firstName} ${client?.lastName}`)
-      .replace('{{client_phone}}', client?.phone || '')
-      .replace('{{res_number}}', res.reservationNumber)
-      .replace('{{total_amount}}', res.totalAmount.toLocaleString())
-      .replace('{{vehicle_name}}', `${vehicle?.brand} ${vehicle?.model}`)
-      .replace('{{vehicle_plate}}', vehicle?.immatriculation || '')
-      .replace('{{current_date}}', new Date().toLocaleDateString());
+    const start = res.startDate ? new Date(res.startDate) : null;
+    const end = res.endDate ? new Date(res.endDate) : null;
+    const format = (d: Date | null) => d ? d.toLocaleDateString() : '';
+    let out = content || '';
+    const replacements: Record<string, string> = {
+      '{{client_name}}': `${client?.firstName || ''} ${client?.lastName || ''}`.trim(),
+      '{{client_phone}}': client?.phone || '',
+      '{{client_email}}': client?.email || client?.email || '',
+      '{{res_number}}': res.reservationNumber || '',
+      '{{total_amount}}': (res.totalAmount || 0).toLocaleString(),
+      '{{vehicle_name}}': `${vehicle?.brand || ''} ${vehicle?.model || ''}`.trim(),
+      '{{vehicle_brand}}': vehicle?.brand || '',
+      '{{vehicle_model}}': vehicle?.model || '',
+      '{{vehicle_color}}': vehicle?.color || vehicle?.color || '',
+      '{{vehicle_plate}}': vehicle?.immatriculation || '',
+      '{{vehicle_mileage}}': vehicle?.mileage?.toString() || '',
+      '{{current_date}}': format(new Date()),
+      '{{res_date}}': format(start),
+      '{{start_date}}': format(start),
+      '{{end_date}}': format(end),
+    };
+
+    Object.keys(replacements).forEach(k => {
+      out = out.split(k).join(replacements[k]);
+    });
+    return out;
+  };
+
+  // Print helper: opens a clean window with only the invoice/selected template content
+  const printTemplate = (template: any, res: Reservation) => {
+    const htmlParts: string[] = [];
+    // simple styles for print
+    const styles = `
+      body { font-family: Inter, Arial, sans-serif; color: #111827; margin: 0; padding: 20mm; }
+      .page { width: 100%; max-width: 210mm; margin: 0 auto; }
+      .title { text-align: center; font-weight:900; font-size:18px; margin-bottom:12px }
+      .section { margin-bottom:10px; }
+      .section h4 { margin: 0 0 6px 0; font-size:12px; font-weight:800; }
+      .content { font-size:11px; line-height:1.4 }
+      .checklist { display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin-top:6px }
+      .check { display:flex; gap:8px; align-items:center }
+      .sig { margin-top:18px; border-top:1px solid #e5e7eb; padding-top:8px; width:45%; text-align:center; }
+    `;
+
+    const pageHeight = template.canvasHeight || 1100;
+    const sigParts: string[] = [];
+    template.elements
+      .filter((el: any) => (el.y || 0) < pageHeight)
+      .forEach((el: any) => {
+      if (el.type === 'logo') return; // skip large logos for invoice print
+      if (el.type === 'table') {
+        // for invoices, keep the table area as rendered by replaceVariables
+        htmlParts.push(`<div class="section content">${replaceVariables(el.content || '', res)}</div>`);
+        return;
+      }
+
+      if (el.type === 'checklist') {
+        let items: any[] = [];
+        try { items = typeof el.content === 'string' ? JSON.parse(el.content) : el.content; } catch (e) { items = []; }
+        const listHtml = items.map(it => `<div class="check"><div style="width:18px;height:18px;border:1px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;background:${it.checked ? '#059669' : '#fff'};color:${it.checked ? '#fff' : '#000'}">${it.checked ? '✔' : '✘'}</div><div>${it.label}</div></div>`).join('');
+        htmlParts.push(`<div class="section"><h4>Liste d'inspection</h4><div class="checklist">${listHtml}</div></div>`);
+        return;
+      }
+
+      if (el.type === 'signature' || el.type === 'signature_area') {
+        sigParts.push(`<div class="sig">${el.content || 'Signature'}</div>`);
+        return;
+      }
+
+      // default: render as content text with variable replacement
+      const text = replaceVariables(el.content || '', res).replace(/\n/g, '<br/>');
+      if (text && text.trim()) htmlParts.push(`<div class="section content">${text}</div>`);
+    });
+
+    // Build a friendly, client-focused invoice/inspection page
+    const client = customers.find(c => c.id === res.customerId);
+    const vehicle = vehicles.find(v => v.id === res.vehicleId);
+    const start = res.startDate ? new Date(res.startDate) : null;
+    const resDate = start ? start.toLocaleDateString() : '';
+
+    // If template has a checklist element, render it; otherwise use htmlParts
+    const checklistEl = template.elements.find((e:any) => e.type === 'checklist');
+    let checklistHtml = '';
+    if (checklistEl) {
+      let items:any[] = [];
+      try { items = typeof checklistEl.content === 'string' ? JSON.parse(checklistEl.content) : checklistEl.content; } catch (e) { items = []; }
+      checklistHtml = items.map(it => `<div class="check"><div style="width:18px;height:18px;border:1px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;background:${it.checked ? '#059669' : '#fff'};color:${it.checked ? '#fff' : '#000'}">${it.checked ? '✔' : '✘'}</div><div style="margin-left:8px">${it.label}</div></div>`).join('');
+    }
+
+    const headerTitle = (template.category === 'checkin') ? "RAPPORT D'INSPECTION - CHECK-IN" : (template.category === 'checkout') ? "RAPPORT D'INSPECTION - CHECK-OUT" : (template.name || 'DOCUMENT');
+
+    const pageHtml = `<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <title>${headerTitle}</title>
+          <style>${styles} .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px}.box{background:#f8fafc;border:1px solid #e6eef6;padding:12px;border-radius:8px}.muted{color:#6b7280;font-size:12px}.big{font-weight:800}
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="title">${headerTitle}</div>
+
+            <div class="info-grid">
+              <div class="box">
+                <div class="muted">Dossier</div>
+                <div class="big">${res.reservationNumber || ''}</div>
+                <div class="muted" style="margin-top:8px">Date inspection</div>
+                <div>${resDate}</div>
+                <div class="muted" style="margin-top:8px">Type</div>
+                <div>${template.category === 'checkin' ? 'Check-in' : template.category === 'checkout' ? 'Check-out' : ''}</div>
+                <hr style="margin:10px 0;border:none;border-top:1px solid #eef2f7" />
+                <div class="muted">Client</div>
+                <div class="big">${client ? `${client.firstName} ${client.lastName}` : ''}</div>
+                <div class="muted">${client?.phone || ''}</div>
+                <div class="muted">${client?.email || ''}</div>
+              </div>
+              <div class="box">
+                <div class="muted">INFORMATIONS DU VÉHICULE</div>
+                <div class="big">${vehicle ? `${vehicle.brand} ${vehicle.model}` : ''}</div>
+                <div class="muted">Couleur: ${vehicle?.color || ''}</div>
+                <div class="muted">Immatriculation: ${vehicle?.immatriculation || ''}</div>
+                <div class="muted">Kilométrage: ${vehicle?.mileage?.toLocaleString() || ''} km</div>
+              </div>
+            </div>
+
+            <div class="box">
+              <div class="muted">LISTE D'INSPECTION</div>
+              <div class="checklist" style="margin-top:8px">${checklistHtml || htmlParts.join('')}</div>
+            </div>
+
+            ${sigParts.length ? `<div style="display:flex;gap:40px;margin-top:28px">${sigParts.join('')}<div class="sig">Agent / Cachet</div></div>` : ''}
+          </div>
+        </body>
+      </html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(pageHtml);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 400);
   };
 
   return (
@@ -243,7 +377,7 @@ const BillingPage: React.FC<BillingPageProps> = ({ lang, customers, vehicles, te
                     </div>
                  </div>
                  <div className="flex gap-4">
-                    <GradientButton onClick={() => window.print()} className="!px-10 !py-4 shadow-xl">Imprimer Document</GradientButton>
+                    <GradientButton onClick={() => { if (selectedTemplate && selectedRes) printTemplate(selectedTemplate, selectedRes); else window.print(); }} className="!px-10 !py-4 shadow-xl">Imprimer Document</GradientButton>
                     <button onClick={() => setActiveModal(null)} className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm hover:text-red-500 transition-all">✕</button>
                  </div>
               </div>
@@ -271,9 +405,25 @@ const BillingPage: React.FC<BillingPageProps> = ({ lang, customers, vehicles, te
                               </table>
                            </div>
                          )}
+                         {el.type === 'checklist' && (() => {
+                            let items: { label: string; checked: boolean }[] = [];
+                            try { items = typeof el.content === 'string' ? JSON.parse(el.content) : el.content; } catch (e) { items = []; }
+                            return (
+                              <div className="p-4" style={{ fontSize: '11px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '8px' }}>
+                                  {items.map((it, idx) => (
+                                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{ width: 18, height: 18, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: it.checked ? '#059669' : '#fff', border: it.checked ? '1px solid #059669' : '1px solid #d1d5db', color: it.checked ? '#fff' : '#111' }}>{it.checked ? '✔' : '✘'}</div>
+                                      <div style={{ color: it.checked ? '#111827' : '#6b7280' }}>{it.label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                         })()}
                          {el.type === 'fuel_mileage' && <div className="w-full h-full p-4 flex justify-between items-center text-[9px] font-black uppercase"><div className="text-center"><p className="opacity-40 text-[7px] mb-1">KM COMPTEUR</p><p>-- KM</p></div><div className="w-px h-6 bg-gray-200"></div><div className="text-center"><p className="opacity-40 text-[7px] mb-1">FUEL</p><p>⛽ PLEIN</p></div></div>}
                          {el.type === 'signature_area' && <div className="w-full h-full flex flex-col justify-between"><span className="text-[8px] font-black uppercase text-gray-300 border-b border-gray-100 pb-1">{el.content}</span><div className="flex-1 py-8 flex items-center justify-center opacity-10"><span className="text-4xl italic">Signature</span></div></div>}
-                         {el.type !== 'logo' && el.type !== 'table' && el.type !== 'fuel_mileage' && el.type !== 'signature_area' && el.type !== 'qr_code' && replaceVariables(el.content, selectedRes)}
+                         {el.type !== 'logo' && el.type !== 'table' && el.type !== 'fuel_mileage' && el.type !== 'signature_area' && el.type !== 'qr_code' && el.type !== 'checklist' && replaceVariables(el.content, selectedRes)}
                       </div>
                     ))}
                  </div>

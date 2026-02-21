@@ -451,14 +451,29 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
   const replaceVariables = (content: string, res: any) => {
     const client = allCustomers.find(c => c.id === res.customer_id);
     const vehicle = vehicles.find(v => v.id === res.vehicle_id);
-    return content
-      .replace('{{client_name}}', `${client?.first_name} ${client?.last_name}`)
-      .replace('{{client_phone}}', client?.phone || '')
-      .replace('{{res_number}}', res.reservation_number)
-      .replace('{{total_amount}}', (res.total_amount || 0).toLocaleString())
-      .replace('{{vehicle_name}}', `${vehicle?.brand} ${vehicle?.model}`)
-      .replace('{{vehicle_plate}}', vehicle?.immatriculation || '')
-      .replace('{{current_date}}', new Date().toLocaleDateString());
+    const start = res.start_date || res.startDate ? new Date(res.start_date || res.startDate) : null;
+    const end = res.end_date || res.endDate ? new Date(res.end_date || res.endDate) : null;
+    const format = (d: Date | null) => d ? d.toLocaleDateString() : '';
+    let out = content || '';
+    const replacements: Record<string, string> = {
+      '{{client_name}}': `${client?.first_name || ''} ${client?.last_name || ''}`.trim(),
+      '{{client_phone}}': client?.phone || '',
+      '{{client_email}}': client?.email || '' ,
+      '{{res_number}}': res.reservation_number || res.reservationNumber || '',
+      '{{total_amount}}': ((res.total_amount || res.totalAmount || 0)).toLocaleString(),
+      '{{vehicle_name}}': `${vehicle?.brand || ''} ${vehicle?.model || ''}`.trim(),
+      '{{vehicle_brand}}': vehicle?.brand || '',
+      '{{vehicle_model}}': vehicle?.model || '',
+      '{{vehicle_color}}': vehicle?.color || '',
+      '{{vehicle_plate}}': vehicle?.immatriculation || '',
+      '{{vehicle_mileage}}': (res.mileage || vehicle?.mileage || '').toString(),
+      '{{current_date}}': format(new Date()),
+      '{{res_date}}': format(start),
+      '{{start_date}}': format(start),
+      '{{end_date}}': format(end),
+    };
+    Object.keys(replacements).forEach(k => { out = out.split(k).join(replacements[k]); });
+    return out;
   };
 
   const currentRes = allReservations.find(r => r.id === inspFormData.reservationId);
@@ -747,8 +762,9 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
                            <p className="text-xl font-black text-gray-900">{insp.mileage.toLocaleString()}</p>
                         </div>
                      </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-4 gap-3">
                       <button onClick={() => setViewingInsp(insp)} className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><span className="text-xl">👁️</span></button>
+                      <button onClick={() => { setEditingInspId(insp.id); setInspFormData(insp); setIsCreatingInsp(true); }} className="p-4 bg-yellow-50 text-yellow-600 rounded-2xl hover:bg-yellow-600 hover:text-white transition-all shadow-sm"><span className="text-xl">✏️</span></button>
                       <button onClick={() => { setSelectedInspForPrint(insp); setActiveModal('print-choice'); }} className="p-4 bg-gray-50 text-gray-400 rounded-2xl hover:bg-gray-900 hover:text-white transition-all shadow-sm"><span className="text-xl">🖨️</span></button>
                       <button onClick={() => onDeleteInspection(insp.id)} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><span className="text-xl">🗑️</span></button>
                     </div>
@@ -990,7 +1006,43 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
                     </div>
                  </div>
                  <div className="flex gap-4">
-                    <GradientButton onClick={() => window.print()} className="!px-10 !py-4 shadow-xl">Imprimer</GradientButton>
+                    <GradientButton onClick={() => {
+                      // open clean print window for template
+                      const tpl = printTemplate;
+                      if (!tpl || !printRes) { window.print(); return; }
+                      const pageHeight = tpl.canvasHeight || 1100;
+                      const styles = `body{font-family:Inter,Arial,sans-serif;padding:20mm;color:#111827} .title{text-align:center;font-weight:900;font-size:18px;margin-bottom:12px} .section{margin-bottom:10px} .check{display:flex;gap:8px;align-items:center}`;
+                      const parts: string[] = [];
+                      const sigParts: string[] = [];
+                      tpl.elements.filter((el:any)=> (el.y||0) < pageHeight).forEach((el:any)=>{
+                        if (el.type === 'logo') return;
+                        if (el.type === 'checklist'){
+                          let items:any[]=[]; try{ items = typeof el.content === 'string' ? JSON.parse(el.content) : el.content;}catch(e){items=[]}
+                          const list = items.map(it=>`<div class="check"><div style="width:18px;height:18px;border:1px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;background:${it.checked?'#059669':'#fff'}">${it.checked? '✔' : '✘'}</div><div>${it.label}</div></div>`).join('');
+                          parts.push(`<div class="section"><h4>Liste d'inspection</h4>${list}</div>`); return;
+                        }
+                        if (el.type === 'signature') { sigParts.push(`<div style="width:45%;text-align:center;border-top:1px solid #e5e7eb;padding-top:8px">${el.content||'Signature'}</div>`); return; }
+                        const text = replaceVariables(el.content||'', printRes).replace(/\n/g,'<br/>'); if (text && text.trim()) parts.push(`<div class="section">${text}</div>`);
+                      });
+                      // Build a clean, client-friendly inspection print page
+                      const client = allCustomers.find((c:any) => c.id === printRes?.customerId);
+                      const vehicle = vehicles.find((v:any) => v.id === printRes?.vehicleId);
+                      const start = printRes?.startDate ? new Date(printRes.startDate) : null;
+                      const resDate = start ? start.toLocaleDateString() : '';
+                      const headerTitle = (tpl.category === 'checkin') ? "RAPPORT D'INSPECTION - CHECK-IN" : (tpl.category === 'checkout') ? "RAPPORT D'INSPECTION - CHECK-OUT" : (tpl.name || 'DOCUMENT');
+                      const checklistEl = tpl.elements.find((e:any)=> e.type === 'checklist');
+                      let checklistHtml = '';
+                      if (checklistEl) {
+                        let items:any[] = []; try{ items = typeof checklistEl.content === 'string' ? JSON.parse(checklistEl.content) : checklistEl.content; }catch(e){items=[]}
+                        checklistHtml = items.map(it=>`<div class="check"><div style="width:18px;height:18px;border:1px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;background:${it.checked?'#059669':'#fff'}">${it.checked? '✔' : '✘'}</div><div style="margin-left:8px">${it.label}</div></div>`).join('');
+                      }
+                      let html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${headerTitle}</title><style>${styles} .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:12px}.box{background:#f8fafc;border:1px solid #e6eef6;padding:12px;border-radius:8px}.muted{color:#6b7280;font-size:12px}.big{font-weight:800}</style></head><body><div class="title">${headerTitle}</div>`;
+                      html += `<div class="info-grid"><div class="box"><div class="muted">Dossier</div><div class="big">${printRes?.reservationNumber||''}</div><div class="muted" style="margin-top:8px">Date inspection</div><div>${resDate}</div><div class="muted" style="margin-top:8px">Type</div><div>${tpl.category === 'checkin' ? 'Check-in' : tpl.category === 'checkout' ? 'Check-out' : ''}</div><hr style="margin:10px 0;border:none;border-top:1px solid #eef2f7" /><div class="muted">Client</div><div class="big">${client ? `${client.first_name} ${client.last_name}` : ''}</div><div class="muted">${client?.phone || ''}</div><div class="muted">${client?.email || ''}</div></div><div class="box"><div class="muted">INFORMATIONS DU VÉHICULE</div><div class="big">${vehicle ? `${vehicle.brand} ${vehicle.model}` : ''}</div><div class="muted">Couleur: ${vehicle?.color || ''}</div><div class="muted">Immatriculation: ${vehicle?.immatriculation || ''}</div><div class="muted">Kilométrage: ${vehicle?.mileage?.toLocaleString() || ''} km</div></div></div>`;
+                      html += `<div class="box"><div class="muted">LISTE D'INSPECTION</div><div class="checklist" style="margin-top:8px">${checklistHtml || parts.join('')}</div></div>`;
+                      if (sigParts.length) html += `<div style="display:flex;gap:40px;margin-top:28px">${sigParts.join('')}<div class="sig">Agent / Cachet</div></div>`;
+                      html += `</body></html>`;
+                      const w = window.open('','_blank'); if (!w) return; w.document.write(html); w.document.close(); setTimeout(()=>{ w.focus(); w.print(); },400);
+                    }} className="!px-10 !py-4 shadow-xl">Imprimer</GradientButton>
                     <button onClick={() => setActivePrintModal(null)} className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm hover:text-red-500 transition-all">✕</button>
                  </div>
               </div>
@@ -1006,7 +1058,23 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
                       }}>
                          {el.type === 'logo' && <div className="w-full h-full flex items-center justify-center font-black opacity-30 uppercase">{el.content}</div>}
                          {el.type === 'qr_code' && <div className="w-10 h-10 border-2 border-gray-900 grid grid-cols-2 gap-0.5 p-0.5"><div className="bg-gray-900"></div><div className="bg-gray-900"></div><div className="bg-gray-900"></div><div></div></div>}
-                         {el.type !== 'logo' && el.type !== 'qr_code' && replaceVariables(el.content, printRes)}
+                         {el.type === 'checklist' && (() => {
+                            let items: { label: string; checked: boolean }[] = [];
+                            try { items = typeof el.content === 'string' ? JSON.parse(el.content) : el.content; } catch (e) { items = []; }
+                            return (
+                              <div className="p-4" style={{ fontSize: '11px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '8px' }}>
+                                  {items.map((it, idx) => (
+                                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{ width: 18, height: 18, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: it.checked ? '#059669' : '#fff', border: it.checked ? '1px solid #059669' : '1px solid #d1d5db', color: it.checked ? '#fff' : '#111' }}>{it.checked ? '✔' : '✘'}</div>
+                                      <div style={{ color: it.checked ? '#111827' : '#6b7280' }}>{it.label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                         })()}
+                         {el.type !== 'logo' && el.type !== 'qr_code' && el.type !== 'checklist' && replaceVariables(el.content, printRes)}
                       </div>
                     ))}
                  </div>
@@ -1023,23 +1091,116 @@ const OperationsPage: React.FC<OperationsPageProps> = ({
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
              <div className="bg-white w-full max-w-6xl rounded-[4rem] shadow-2xl animate-scale-in overflow-hidden max-h-[95vh] flex flex-col border border-white/20">
-                <div className="p-10 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div className="p-8 md:p-10 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                    <div className="flex items-center gap-6">
-                      <div className="w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center text-3xl shadow-xl">📄</div>
-                      <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">Rapport d'Inspection</h2>
+                      <div className="w-14 h-14 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center text-3xl shadow-xl">📄</div>
+                      <div>
+                        <h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tighter">Rapport d'Inspection</h2>
+                        <div className="text-sm text-gray-500 mt-1">{viewingInsp.type === 'depart' ? 'Check-in' : 'Check-out'} • {viewingInsp.date} • Dossier #{res?.reservation_number || res?.reservationNumber || ''}</div>
+                      </div>
                    </div>
-                   <button onClick={() => setViewingInsp(null)} className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm hover:text-red-500 transition-all">✕</button>
+                   <div className="flex items-center gap-4">
+                      <button onClick={() => { setSelectedInspForPrint(viewingInsp); setActiveModal('print-choice'); }} className="px-4 py-2 bg-gray-50 text-gray-600 rounded-2xl hover:bg-gray-900 hover:text-white transition-all">🖨️ Imprimer</button>
+                      <button onClick={() => setViewingInsp(null)} className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm hover:text-red-500 transition-all">✕</button>
+                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-10 md:p-14 space-y-16 custom-scrollbar">
-                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                      <div className="p-8 bg-blue-50/50 rounded-[3rem] border border-blue-100 flex items-center gap-8 shadow-sm">
-                         <img src={veh?.mainImage} className="w-40 h-28 object-cover rounded-[2rem] shadow-2xl border-4 border-white shrink-0" />
-                         <div><h3 className="text-3xl font-black text-gray-900">{veh?.brand} {veh?.model}</h3><p className="text-sm font-black text-blue-700">{veh?.immatriculation}</p></div>
+
+                <div className="flex-1 overflow-y-auto p-6 md:p-12 space-y-8 custom-scrollbar">
+                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <div className="lg:col-span-2 space-y-6">
+                        <div className="flex items-start gap-6">
+                          <img src={veh?.mainImage} className="w-44 h-32 object-cover rounded-[1.5rem] shadow-lg border-4 border-white shrink-0" />
+                          <div className="flex-1">
+                            <h3 className="text-2xl font-black text-gray-900">{veh?.brand} {veh?.model} <span className="text-sm text-gray-500 font-bold">• {veh?.color || ''}</span></h3>
+                            <div className="mt-2 text-sm text-gray-600">Immatriculation: <span className="font-black text-gray-800">{veh?.immatriculation}</span></div>
+                            <div className="mt-1 text-sm text-gray-600">Châssis: <span className="font-black text-gray-800">{veh?.chassisNumber || veh?.chassis_number || ''}</span></div>
+                            <div className="mt-3 grid grid-cols-3 gap-4 text-sm text-gray-700">
+                              <div><div className="text-xs text-gray-400 uppercase">KM relevé</div><div className="font-black text-lg">{viewingInsp.mileage?.toLocaleString?.() ?? viewingInsp.mileage}</div></div>
+                              <div><div className="text-xs text-gray-400 uppercase">Carburant</div><div className="font-black text-lg">{viewingInsp.fuel}</div></div>
+                              <div><div className="text-xs text-gray-400 uppercase">Type</div><div className="font-black text-lg">{viewingInsp.type === 'depart' ? 'Check-in' : 'Check-out'}</div></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                          <h4 className="text-lg font-black text-gray-900 mb-4">Liste d'Inspection</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(viewingInsp.security || {}).map(([k,v]) => (
+                              <div key={k} className="p-3 bg-white rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-md flex items-center justify-center ${v ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}>{v ? '✔' : '✘'}</div>
+                                <div className="text-sm text-gray-700 truncate">{k.replace(/([A-Z])/g, ' $1')}</div>
+                              </div>
+                            ))}
+                            {Object.entries(viewingInsp.equipment || {}).map(([k,v]) => (
+                              <div key={k} className="p-3 bg-white rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-md flex items-center justify-center ${v ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}>{v ? '✔' : '✘'}</div>
+                                <div className="text-sm text-gray-700 truncate">{k.replace(/([A-Z])/g, ' $1')}</div>
+                              </div>
+                            ))}
+                            {Object.entries(viewingInsp.cleanliness || {}).map(([k,v]) => (
+                              <div key={k} className="p-3 bg-white rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-md flex items-center justify-center ${v ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}>{v ? '✔' : '✘'}</div>
+                                <div className="text-sm text-gray-700 truncate">{k.replace(/([A-Z])/g, ' $1')}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {viewingInsp.notes ? (
+                          <div className="p-6 bg-white rounded-2xl border border-gray-100">
+                            <h4 className="text-lg font-black text-gray-900 mb-2">Notes de l'inspection</h4>
+                            <div className="text-sm text-gray-700">{viewingInsp.notes}</div>
+                          </div>
+                        ) : null}
+
+                        <div>
+                          <h4 className="text-lg font-black text-gray-900 mb-4">Photos</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {(viewingInsp.exteriorPhotos || []).map((src, idx) => (
+                              <a key={`ext-${idx}`} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-gray-100 shadow-sm">
+                                <img src={src} className="w-full h-36 object-cover" />
+                              </a>
+                            ))}
+                            {(viewingInsp.interiorPhotos || []).map((src, idx) => (
+                              <a key={`int-${idx}`} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-gray-100 shadow-sm">
+                                <img src={src} className="w-full h-36 object-cover" />
+                              </a>
+                            ))}
+                            {((viewingInsp.exteriorPhotos || []).length === 0 && (viewingInsp.interiorPhotos || []).length === 0) && (
+                              <div className="text-sm text-gray-500 col-span-4">Aucune photo d'inspection disponible.</div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="p-8 bg-gray-50/50 rounded-[3rem] border border-gray-100 flex items-center gap-8 shadow-sm">
-                         <img src={client?.profile_picture || 'https://via.placeholder.com/96'} onError={(e) => {e.currentTarget.src = 'https://via.placeholder.com/96'}} className="w-24 h-24 object-cover rounded-full border-4 border-white shadow-xl shrink-0" />
-                         <div><h3 className="text-2xl font-black text-gray-900">{client?.first_name} {client?.last_name}</h3><p className="text-xs font-bold text-gray-500">📞 {client?.phone}</p></div>
-                      </div>
+
+                      <aside className="space-y-6">
+                        <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                          <h4 className="text-sm font-black text-gray-500 uppercase tracking-widest">Client</h4>
+                          <div className="mt-3">
+                            <div className="text-lg font-black text-gray-900">{client?.first_name || client?.firstName} {client?.last_name || client?.lastName}</div>
+                            <div className="text-sm text-gray-600">📞 {client?.phone}</div>
+                            {client?.email && <div className="text-sm text-gray-600">✉️ {client.email || client?.email}</div>}
+                            {client?.licenseNumber && <div className="text-sm text-gray-600">Permis: {client.licenseNumber}</div>}
+                          </div>
+                        </div>
+
+                        <div className="p-6 bg-white rounded-2xl border border-gray-100">
+                          <h4 className="text-sm font-black text-gray-500 uppercase tracking-widest">Réservation</h4>
+                          <div className="mt-3 text-sm text-gray-700">
+                            <div>#{res?.reservation_number || res?.reservationNumber}</div>
+                            <div>Du: {res?.startDate || res?.start_date} → Au: {res?.endDate || res?.end_date}</div>
+                            <div>Agence prise: {res?.pickupAgencyId || res?.pickup_agency_id}</div>
+                            <div>Agence retour: {res?.returnAgencyId || res?.return_agency_id}</div>
+                          </div>
+                        </div>
+
+                        {viewingInsp.signature && (
+                          <div className="p-6 bg-white rounded-2xl border border-gray-100 text-center">
+                            <h4 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-3">Signature</h4>
+                            <img src={viewingInsp.signature} className="mx-auto w-48 h-24 object-contain" />
+                          </div>
+                        )}
+                      </aside>
                    </div>
                 </div>
              </div>

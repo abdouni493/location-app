@@ -37,7 +37,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ lang }) => {
     username: 'admin',
     email: 'contact@driveflow.dz',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    logo: ''
   });
 
   useEffect(() => {
@@ -77,8 +78,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ lang }) => {
           username: 'admin',
           email: 'contact@driveflow.dz',
           newPassword: '',
-          confirmPassword: ''
+          confirmPassword: '',
+          logo: configData.logo_url || ''
         });
+        if (configData.logo_url) {
+          setLogoPreview(configData.logo_url);
+        }
       }
 
       // Fetch admin security info
@@ -258,7 +263,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ lang }) => {
         daily_mileage_limit: configData.dailyLimit,
         mileage_tolerance: configData.toleranceKM,
         excess_price: configData.excessPrice,
-        unlimited_price: configData.unlimitedPrice
+        unlimited_price: configData.unlimitedPrice,
+        logo_url: logoPreview || configData.logo
       };
 
       // Update or insert config
@@ -445,11 +451,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ lang }) => {
     }
   };
 
-  // Fix: safely handle file selection to avoid "unknown" to "Blob" error by narrowing the type
+  // Fix: safely handle file selection and convert to base64
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setLogoPreview(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64String = event.target?.result as string;
+        setLogoPreview(base64String);
+        setConfigData(prev => ({ ...prev, logo: base64String }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 

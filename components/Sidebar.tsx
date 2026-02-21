@@ -57,11 +57,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeId, onNavigate, lang, o
       <div className="flex items-center justify-between h-20 px-6 border-b border-gray-100 min-w-[288px] whitespace-nowrap gap-3">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {logo && (
-            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-600 to-red-600 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-600 to-red-600 flex items-center justify-center shadow-lg border-2 border-white">
               <img src={logo} className="w-full h-full object-cover" alt="Logo" />
             </div>
           )}
-          <span className={`text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-red-600 ${isRtl ? 'font-arabic' : ''} truncate`}>
+          {!logo && (
+            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-600 to-red-600 flex items-center justify-center shadow-lg border-2 border-white text-white font-black text-lg">
+              DF
+            </div>
+          )}
+          <span className={`text-lg font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-red-600 ${isRtl ? 'font-arabic' : ''} truncate`}>
             {storeName}
           </span>
         </div>
