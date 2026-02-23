@@ -203,7 +203,6 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
 
       onAddReservation();
       resetForm();
-      alert('Réservation créée avec succès !');
     } catch (err: any) {
       alert(`Erreur: ${err.message}`);
     } finally {
