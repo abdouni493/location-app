@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Language, Expense, Maintenance, Vehicle } from '../types';
 import { supabase } from '../lib/supabase';
 import GradientButton from '../components/GradientButton';
@@ -19,6 +19,7 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, initialExpenses, init
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [maintenanceType, setMaintenanceType] = useState<string>('vidange');
+  const [vehicleFilter, setVehicleFilter] = useState<string>('');
 
   const isRtl = lang === 'ar';
 
@@ -180,6 +181,22 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, initialExpenses, init
     }
   };
 
+  const filteredMaintenances = useMemo(() => {
+    if (!vehicleFilter || vehicleFilter.trim() === '') return maintenances;
+    const q = vehicleFilter.toLowerCase();
+    const matchedVehicleIds = initialVehicles
+      .filter(v => {
+        const name = `${v.brand} ${v.model}`.toLowerCase();
+        const plate = (v.immatriculation || '').toLowerCase();
+        const chassis = ((v as any).chassisNumber || '').toLowerCase();
+        return name.includes(q) || plate.includes(q) || chassis.includes(q);
+      })
+      .map(v => v.id);
+    return maintenances.filter(m => matchedVehicleIds.includes(m.vehicleId));
+  }, [vehicleFilter, maintenances, initialVehicles]);
+
+  const totalForVehicle = useMemo(() => filteredMaintenances.reduce((s, m) => s + (m.cost || 0), 0), [filteredMaintenances]);
+
   return (
     <div className={`p-8 ${isRtl ? 'font-arabic text-right' : ''}`}>
       <div className="flex gap-4 mb-12">
@@ -191,12 +208,30 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, initialExpenses, init
         </button>
       </div>
 
-      <div className="flex justify-between items-center mb-12">
+      <div className="flex justify-between items-center mb-4">
         <h1 className="text-4xl font-black text-gray-900">{activeTab === 'store' ? currentT.storeTitle : currentT.vehicleTitle}</h1>
         <GradientButton onClick={() => handleOpenForm()}>
           {activeTab === 'store' ? currentT.addExpense : currentT.addMaintenance}
         </GradientButton>
       </div>
+
+      {activeTab === 'vehicle' && (
+        <div className="mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <input
+            type="text"
+            placeholder="Rechercher véhicule (marque, modèle ou immatriculation)"
+            value={vehicleFilter}
+            onChange={e => setVehicleFilter(e.target.value)}
+            className="w-full md:w-2/3 px-6 py-4 rounded-2xl bg-white border border-gray-100 outline-none font-bold"
+          />
+
+          <div className="w-full md:w-auto bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Dépenses</p>
+            <p className="text-2xl font-black text-gray-900">{totalForVehicle.toLocaleString()} <span className="text-sm font-bold opacity-40">{currentT.currency}</span></p>
+            <p className="text-xs text-gray-500 mt-1">Affiché: {filteredMaintenances.length} entrée(s)</p>
+          </div>
+        </div>
+      )}
 
       {isFormOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -293,7 +328,7 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ lang, initialExpenses, init
             </div>
           ))
         ) : (
-          maintenances.map(m => {
+          filteredMaintenances.map(m => {
             const v = initialVehicles.find(veh => veh.id === m.vehicleId);
             return (
               <div key={m.id} className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl transition-all group">

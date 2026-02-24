@@ -105,6 +105,7 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
   const [tempOptionCat, setTempOptionCat] = useState<RentalOption['category'] | null>(null);
   const [activeModal, setActiveModal] = useState<ActionModal>(null);
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
+  const [openRowActions, setOpenRowActions] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
 
@@ -168,7 +169,9 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
     const baseTotal = (v?.dailyRate || 0) * days;
     const optionsTotal = formData.tempOptions.reduce((acc, o) => acc + o.price, 0);
     const subtotal = baseTotal + optionsTotal - (formData.discount || 0);
-    const finalTotal = formData.withTVA ? subtotal * 1.19 : subtotal;
+    const computedFinal = formData.withTVA ? subtotal * 1.19 : subtotal;
+    const override = (formData as any).totalAmount;
+    const finalTotal = typeof override === 'number' && !isNaN(override) ? override : computedFinal;
     const rest = finalTotal - (formData.paidAmount || 0);
     return { days, baseTotal, optionsTotal, subtotal, finalTotal, rest };
   }, [formData]);
@@ -206,7 +209,7 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
         return_agency_id: formData.differentReturn ? formData.returnAgencyId : formData.pickupAgencyId,
         driver_id: formData.isWithDriver ? formData.driverId : null,
         status: 'confermer',
-        total_amount: invoice.finalTotal,
+        total_amount: (formData as any).totalAmount ?? invoice.finalTotal,
         paid_amount: formData.paidAmount,
         caution_amount: formData.cautionAmount || 0,
         discount: formData.discount || 0,
@@ -361,6 +364,49 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
       onUpdateReservation();
       setActiveModal(null);
     } catch (err) { alert("Erreur suppression"); } finally { setLoading(false); }
+  };
+
+  const handleEditReservation = (res: Reservation) => {
+    // Populate the creation form with reservation data so user can edit step-by-step
+    try {
+      const s = new Date(res.startDate);
+      const e = new Date(res.endDate);
+      const startDate = s.toISOString().slice(0,10);
+      const startTime = s.toISOString().slice(11,16);
+      const endDate = e.toISOString().slice(0,10);
+      const endTime = e.toISOString().slice(11,16);
+
+      setFormData({
+        ...formData,
+        customerId: res.customerId,
+        vehicleId: res.vehicleId,
+        startDate,
+        startTime,
+        endDate,
+        endTime,
+        pickupAgencyId: (res as any).pickupAgencyId || (res as any).pickup_agency_id || undefined,
+        returnAgencyId: (res as any).returnAgencyId || (res as any).return_agency_id || undefined,
+        differentReturn: ((res as any).returnAgencyId || (res as any).return_agency_id) && ((res as any).returnAgencyId || (res as any).return_agency_id) !== ((res as any).pickupAgencyId || (res as any).pickup_agency_id),
+        driverId: (res as any).driverId || (res as any).driver_id || undefined,
+        isWithDriver: !!((res as any).driverId || (res as any).driver_id),
+        paidAmount: (res as any).paidAmount || (res as any).paid_amount || 0,
+        discount: (res as any).discount || res.discount || 0,
+        withTVA: (res as any).with_tva || res.withTVA || false,
+        tempOptions: (res as any).options || res.options || [],
+        cautionAmount: (res as any).cautionAmount || (res as any).caution_amount || 0,
+        status: res.status,
+        // allow overriding total
+        totalAmount: (res as any).totalAmount || (res as any).total_amount || undefined
+      });
+
+      setIsCreating(true);
+      setCreationStep(1);
+      setIsCreatingNewClient(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error('Failed to populate reservation for edit', err);
+      alert('Impossible d\'ouvrir la réservation pour modification.');
+    }
   };
 
   return (
@@ -697,10 +743,19 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                         </div>
                       </div>
                     </div>
-                    <div className="text-center lg:text-right">
-                      <p className="text-[10px] font-black uppercase opacity-40 mb-4 tracking-[0.4em]">TOTAL GÉNÉRAL À PAYER</p>
-                      <p className="text-9xl font-black text-blue-400 leading-none tracking-tighter">{invoice.finalTotal.toLocaleString()} <span className="text-3xl font-bold uppercase">DZ</span></p>
-                    </div>
+                      <div className="w-full text-center">
+                        <p className="text-[10px] font-black uppercase opacity-40 mb-4 tracking-[0.4em]">TOTAL GÉNÉRAL À PAYER</p>
+                        <div className="flex items-center justify-center gap-4">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={((formData as any).totalAmount ?? invoice.finalTotal) as any}
+                            onChange={e => setFormData({...formData, totalAmount: e.target.value === '' ? undefined : Number(e.target.value)})}
+                            className="w-full max-w-[420px] text-center text-7xl font-black text-blue-400 leading-none tracking-tighter px-6 py-3 rounded-xl bg-white/5"
+                          />
+                          <span className="text-3xl font-bold uppercase">DZ</span>
+                        </div>
+                      </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -810,6 +865,7 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                     <button onClick={() => handleDeleteRes(res.id)} title="Supprimer" className="absolute top-3 left-3 bg-white/95 text-red-600 hover:bg-red-600 hover:text-white rounded-full p-2 shadow-md transition-colors">
                       🗑️
                     </button>
+                    {/* Edit Button removed from image area - moved into header below */}
                     {/* Client Avatar */}
                     <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 backdrop-blur rounded-full pr-3 shadow-lg">
                       {c?.profilePicture ? (
@@ -824,8 +880,9 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                   {/* Content */}
                   <div className="p-5 flex flex-col flex-1">
                     {/* Header Info */}
-                    <div className="mb-4">
+                    <div className="mb-4 relative">
                       <div className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Réservation #{res.reservationNumber}</div>
+                      <button onClick={() => handleEditReservation(res)} title="Modifier" className="absolute top-0 right-0 bg-white/95 text-gray-600 hover:bg-blue-600 hover:text-white rounded-full p-2 shadow-md transition-colors z-30">✏️</button>
                       <h3 className="text-lg font-black text-gray-900 leading-tight">{v?.brand} {v?.model}</h3>
                       <p className="text-[11px] text-gray-500 font-bold">{v?.immatriculation}</p>
                     </div>
@@ -900,6 +957,7 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                 <div className="col-span-1 text-center">💳 Payé</div>
                 <div className="col-span-1 text-center">🔄 Reste</div>
                 <div className="col-span-1 text-center">📊 Statut</div>
+                <div className="col-span-1 text-center">•</div>
               </div>
 
               {/* Table Rows */}
@@ -972,55 +1030,24 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                       </span>
                     </div>
 
-                    {/* Action Dropdown */}
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all">
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => { setSelectedRes(res); setActiveModal('details'); }} 
-                          className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
-                          title="Détails"
-                        >
-                          🔍
-                        </button>
-                        {rest > 0 && (
-                          <button 
-                            onClick={() => { setSelectedRes(res); setPaymentAmount(0); setActiveModal('pay'); }} 
-                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"
-                            title="Payer"
-                          >
-                            💰
-                          </button>
-                        )}
-                        {res.status === 'confermer' && (
-                          <button 
-                            onClick={() => { setSelectedRes(res); setLogData({ mileage: v?.mileage, fuel: 'plein', location: agencies[0]?.name }); setActiveModal('activate'); }} 
-                            className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all"
-                            title="Activer"
-                          >
-                            🏁
-                          </button>
-                        )}
-                        {res.status === 'en cours' && (
-                          <button 
-                            onClick={() => { 
-                              setSelectedRes(res); 
-                              setTermData({ mileage: (v?.mileage || 0) + 100, fuel: 'plein', date: new Date().toISOString().slice(0, 16), location: agencies[0]?.name, notes: '', extraKmCost: 0, extraFuelCost: 0, withTva: false }); 
-                              setActiveModal('terminate'); 
-                            }} 
-                            className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-600 hover:text-white transition-all"
-                            title="Terminer"
-                          >
-                            🔒
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => handleDeleteRes(res.id)} 
-                          className="p-2 bg-red-50 text-gray-400 rounded-lg hover:text-red-600 transition-all"
-                          title="Supprimer"
-                        >
-                          🗑️
-                        </button>
-                      </div>
+                    {/* Actions column (three-dots menu) - list view only */}
+                    <div className="col-span-1 text-right relative">
+                      <button onClick={() => setOpenRowActions(openRowActions === res.id ? null : res.id)} className="px-3 py-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-all">⋯</button>
+                      {openRowActions === res.id && (
+                        <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg border p-2 z-40">
+                          <div className="flex flex-col gap-2">
+                            <button onClick={() => { setSelectedRes(res); handleEditReservation(res); setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-gray-50">✏️ Modifier</button>
+                            <button onClick={() => { setSelectedRes(res); setActiveModal('details'); setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-gray-50">🔍 Détails</button>
+                            {rest > 0 && <button onClick={() => { setSelectedRes(res); setPaymentAmount(0); setActiveModal('pay'); setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-gray-50">💰 Payer</button>}
+                            <button onClick={() => { setSelectedRes(res); setSelectedDocType('devis'); const tpl = templates?.find(t=>t.category==='devis'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-gray-50">📋 Devis</button>
+                            <button onClick={() => { setSelectedRes(res); setSelectedDocType('contrat'); const tpl = templates?.find(t=>t.category==='contract'||t.category==='contrat'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-gray-50">📄 Contrat</button>
+                            <button onClick={() => { setSelectedRes(res); setSelectedDocType('versement'); const tpl = templates?.find(t=>t.category==='versement'); if(tpl){ setSelectedTemplate(tpl); setActiveModal('print-choice'); } else { setSelectedTemplate(null); setActiveModal('personalize'); } setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-gray-50">🧾 Versement</button>
+                            {res.status === 'confermer' && <button onClick={() => { setSelectedRes(res); setLogData({ mileage: v?.mileage, fuel: 'plein', location: agencies[0]?.name }); setActiveModal('activate'); setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-green-50">🏁 Activer</button>}
+                            {res.status === 'en cours' && <button onClick={() => { setSelectedRes(res); setTermData({ mileage: (v?.mileage || 0) + 100, fuel: 'plein', date: new Date().toISOString().slice(0, 16), location: agencies[0]?.name, notes: '', extraKmCost: 0, extraFuelCost: 0, withTva: false }); setActiveModal('terminate'); setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-orange-50">🔒 Terminer</button>}
+                            <button onClick={() => { handleDeleteRes(res.id); setOpenRowActions(null); }} className="text-left px-2 py-2 rounded-md hover:bg-red-50">🗑️ Supprimer</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
