@@ -90,6 +90,15 @@ export interface Customer {
   address: string;
   licenseNumber: string;
   licenseExpiry: string;
+  // New document/passport fields
+  documentType?: 'carte_identite' | 'passeport' | 'autre';
+  documentNumber?: string;
+  documentDeliveryDate?: string;
+  documentDeliveryAddress?: string;
+  documentExpiryDate?: string;
+  // Driving licence extra info
+  licenseIssueDate?: string;
+  licenseIssuePlace?: string;
   profilePicture?: string;
   documentImages: string[];
   documentLeftAtStore?: string;

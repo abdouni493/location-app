@@ -25,10 +25,69 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
   // Form State for UI previews (Base64 strings)
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [docPreviews, setDocPreviews] = useState<string[]>([]);
+  const [documentType, setDocumentType] = useState<string | null>(null);
+  const [showRawCustomer, setShowRawCustomer] = useState(false);
   
   const isRtl = lang === 'ar';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+
+  const getField = (c: any, camel: string, snake: string) => {
+    if (!c) return null;
+    return c[camel] ?? c[snake] ?? null;
+  };
+
+  const normalizeCustomer = (c: any) => {
+    if (!c) return c;
+    return {
+      ...c,
+      id: getField(c, 'id', 'id'),
+      firstName: getField(c, 'firstName', 'first_name') || getField(c, 'first_name', 'firstName'),
+      lastName: getField(c, 'lastName', 'last_name') || getField(c, 'last_name', 'lastName'),
+      phone: getField(c, 'phone', 'phone'),
+      email: getField(c, 'email', 'email'),
+      idCardNumber: getField(c, 'idCardNumber', 'id_card_number'),
+      wilaya: getField(c, 'wilaya', 'wilaya'),
+      address: getField(c, 'address', 'address'),
+      licenseNumber: getField(c, 'licenseNumber', 'license_number'),
+      licenseExpiry: getField(c, 'licenseExpiry', 'license_expiry'),
+      profilePicture: getField(c, 'profilePicture', 'profile_picture'),
+      documentImages: getField(c, 'documentImages', 'document_images') || [],
+      documentLeftAtStore: getField(c, 'documentLeftAtStore', 'document_left_at_store'),
+      documentType: getField(c, 'documentType', 'document_type'),
+      documentNumber: getField(c, 'documentNumber', 'document_number'),
+      documentDeliveryDate: getField(c, 'documentDeliveryDate', 'document_delivery_date'),
+      documentDeliveryAddress: getField(c, 'documentDeliveryAddress', 'document_delivery_address'),
+      documentExpiryDate: getField(c, 'documentExpiryDate', 'document_expiry_date'),
+      licenseIssueDate: getField(c, 'licenseIssueDate', 'license_issue_date'),
+      licenseIssuePlace: getField(c, 'licenseIssuePlace', 'license_issue_place'),
+      totalReservations: getField(c, 'totalReservations', 'total_reservations') ?? 0,
+      totalSpent: getField(c, 'totalSpent', 'total_spent') ?? 0,
+    };
+  };
+
+  const openDetails = async (c: any) => {
+    try {
+      // Try to fetch fresh full row from DB to ensure new columns are present
+      if (c && (c.id || c.id === 0)) {
+        const id = c.id || c['id'];
+        const { data, error } = await supabase.from('customers').select('*').eq('id', id).limit(1).single();
+        if (!error && data) {
+          setActiveModal({ type: 'details', customer: normalizeCustomer(data) });
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch customer details', err);
+    }
+    // Fallback to normalized local object
+    setActiveModal({ type: 'details', customer: normalizeCustomer(c) });
+  };
+
+  const isValidUrl = (u?: string | null) => {
+    if (!u || typeof u !== 'string') return false;
+    return /^data:|^https?:\/\//.test(u);
+  };
 
   const t = {
     fr: {
@@ -100,13 +159,17 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
   }[lang];
 
   const handleOpenForm = (customer: Customer | null = null) => {
-    setEditingCustomer(customer);
     if (customer) {
-      setProfilePreview(customer.profilePicture || null);
-      setDocPreviews(customer.documentImages || []);
+      const norm = normalizeCustomer(customer);
+      setEditingCustomer(norm as Customer);
+      setProfilePreview(norm.profilePicture || null);
+      setDocPreviews(norm.documentImages || []);
+      setDocumentType(norm.documentType || null);
     } else {
+      setEditingCustomer(null);
       setProfilePreview(null);
       setDocPreviews([]);
+      setDocumentType(null);
     }
     setIsFormOpen(true);
   };
@@ -138,10 +201,17 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
       phone: fd.get('phone') as string,
       email: fd.get('email') as string,
       id_card_number: fd.get('id_card_number') as string,
+      document_type: fd.get('document_type') as string || null,
+      document_number: fd.get('document_number') as string || null,
+      document_delivery_date: fd.get('document_delivery_date') as string || null,
+      document_delivery_address: fd.get('document_delivery_address') as string || null,
+      document_expiry_date: fd.get('document_expiry_date') as string || null,
       wilaya: fd.get('wilaya') as string,
       address: fd.get('address') as string,
       license_number: fd.get('license_number') as string,
       license_expiry: fd.get('license_expiry') as string,
+      license_issue_date: fd.get('license_issue_date') as string || null,
+      license_issue_place: fd.get('license_issue_place') as string || null,
       profile_picture: profilePreview,
       document_images: docPreviews,
       document_left_at_store: fd.get('document_left') as string
@@ -224,23 +294,62 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
                 <SectionHeader title={t.officialDocs} icon="📄" color="text-indigo-600" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">{t.idCard}</label>
-                    <input name="id_card_number" defaultValue={editingCustomer?.idCardNumber} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" required />
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Type Document</label>
+                    <select name="document_type" value={documentType || ''} onChange={(e) => setDocumentType(e.target.value || null)} className="w-full px-8 py-5 bg-gray-50 rounded-3xl font-black text-lg">
+                      <option value="">Aucun</option>
+                      <option value="carte_identite">Carte d'identité</option>
+                      <option value="passeport">Passeport</option>
+                      <option value="autre">Autre</option>
+                    </select>
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Numéro Document</label>
+                    <input name="document_number" defaultValue={editingCustomer?.documentNumber || editingCustomer?.idCardNumber} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Date délivrance</label>
+                    <input name="document_delivery_date" type="date" defaultValue={editingCustomer?.documentDeliveryDate} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Adresse délivrance</label>
+                    <input name="document_delivery_address" defaultValue={editingCustomer?.documentDeliveryAddress} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Date expiration</label>
+                    <input name="document_expiry_date" type="date" defaultValue={editingCustomer?.documentExpiryDate} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" />
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase px-4">{t.license}</label>
                     <input name="license_number" defaultValue={editingCustomer?.licenseNumber} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" required />
                   </div>
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase px-4">{t.licenseExp}</label>
                     <input name="license_expiry" type="date" defaultValue={editingCustomer?.licenseExpiry} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" required />
                   </div>
+
+                  <div className="space-y-2 md:col-span-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Date délivrance Permis</label>
+                    <input name="license_issue_date" type="date" defaultValue={editingCustomer?.licenseIssueDate} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase px-4">Adresse délivrance Permis</label>
+                    <input name="license_issue_place" defaultValue={editingCustomer?.licenseIssuePlace} className="w-full px-8 py-5 bg-gray-50 rounded-3xl outline-none font-black text-lg" />
+                  </div>
+
                   <div className="space-y-2 md:col-span-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase px-4">{t.wilaya}</label>
                     <select name="wilaya" defaultValue={editingCustomer?.wilaya || '16 - Alger'} className="w-full px-8 py-5 bg-gray-50 rounded-3xl font-black text-lg">
                        {ALGERIAN_WILAYAS.map(w => <option key={w} value={w}>{w}</option>)}
                     </select>
                   </div>
+
                   <div className="space-y-2 md:col-span-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase px-4">{t.docLeft}</label>
                     <select name="document_left" defaultValue={editingCustomer?.documentLeftAtStore || 'Aucun'} className="w-full px-8 py-5 bg-gray-50 rounded-3xl font-black text-lg border-2 border-indigo-200">
@@ -326,7 +435,7 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
               </div>
               <div className="mt-auto space-y-4 pt-4 border-t border-gray-50">
                 <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => setActiveModal({ type: 'details', customer: c })} className="py-4.5 rounded-2xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2">🔍 {t.details}</button>
+                  <button onClick={() => openDetails(c)} className="py-4.5 rounded-2xl bg-blue-50 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2">🔍 {t.details}</button>
                   <button onClick={() => setActiveModal({ type: 'history', customer: c })} className="py-4.5 rounded-2xl bg-gray-50 text-gray-500 font-black uppercase text-[10px] tracking-widest hover:bg-black hover:text-white transition-all shadow-sm flex items-center justify-center gap-2">📜 {t.history}</button>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -355,26 +464,47 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-6xl rounded-[4rem] overflow-hidden shadow-2xl animate-scale-in flex flex-col md:flex-row h-[90vh]">
             <div className="md:w-1/3 bg-gray-50 p-10 flex flex-col items-center border-r border-gray-100 overflow-y-auto custom-scrollbar">
-              <div className="w-48 h-48 rounded-full border-8 border-white shadow-2xl overflow-hidden mb-8 flex-shrink-0">
-                <img src={activeModal.customer.profilePicture || 'https://via.placeholder.com/200'} className="w-full h-full object-cover" alt="Profile" />
+                <div className="w-48 h-48 rounded-full border-8 border-white shadow-2xl overflow-hidden mb-8 flex-shrink-0">
+                <img
+                  src={
+                    isValidUrl(getField(activeModal.customer, 'profilePicture', 'profile_picture'))
+                      ? (getField(activeModal.customer, 'profilePicture', 'profile_picture') as string)
+                      : 'https://via.placeholder.com/200'
+                  }
+                  className="w-full h-full object-cover"
+                  alt="Profile"
+                />
               </div>
               <h2 className="text-3xl font-black text-gray-900 text-center mb-10 leading-tight">{activeModal.customer.firstName}<br/>{activeModal.customer.lastName}</h2>
               <div className="w-full space-y-6">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Documents Scannés</p>
                 <div className="grid grid-cols-1 gap-4">
-                  {activeModal.customer.documentImages.map((url, i) => (
-                    <img key={i} src={url} className="w-full rounded-2xl shadow-sm border-2 border-white" />
-                  ))}
+                  {((getField(activeModal.customer, 'documentImages', 'document_images') as any[]) || [])
+                    .filter(u => isValidUrl(u))
+                    .map((url: string, i: number) => (
+                      <img key={i} src={url} className="w-full rounded-2xl shadow-sm border-2 border-white" />
+                    ))}
                 </div>
               </div>
             </div>
             <div className="md:w-2/3 p-16 overflow-y-auto relative bg-white custom-scrollbar text-left">
-              <button onClick={() => setActiveModal({ type: null, customer: null })} className="absolute top-8 right-8 w-14 h-14 flex items-center justify-center bg-gray-50 rounded-full text-2xl">✕</button>
+              <div className="absolute top-8 right-8 flex items-center gap-3">
+                <button onClick={() => setShowRawCustomer(s => !s)} className="w-10 h-10 bg-gray-50 rounded-full text-sm font-black">RAW</button>
+                <button onClick={() => setActiveModal({ type: null, customer: null })} className="w-14 h-14 flex items-center justify-center bg-gray-50 rounded-full text-2xl">✕</button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-                <div><p className="text-[10px] font-black text-blue-600 uppercase mb-2">Téléphone</p><p className="text-2xl font-black">{activeModal.customer.phone}</p></div>
-                <div><p className="text-[10px] font-black text-blue-600 uppercase mb-2">Email</p><p className="text-2xl font-black">{activeModal.customer.email || 'N/A'}</p></div>
-                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Identité</p><p className="text-xl font-bold">{activeModal.customer.idCardNumber}</p></div>
-                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Permis</p><p className="text-xl font-bold">{activeModal.customer.licenseNumber}</p></div>
+                <div><p className="text-[10px] font-black text-blue-600 uppercase mb-2">Téléphone</p><p className="text-2xl font-black">{getField(activeModal.customer, 'phone', 'phone') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-blue-600 uppercase mb-2">Email</p><p className="text-2xl font-black">{getField(activeModal.customer, 'email', 'email') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Type Document</p><p className="text-xl font-bold">{getField(activeModal.customer, 'documentType', 'document_type') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Wilaya</p><p className="text-xl font-bold">{getField(activeModal.customer, 'wilaya', 'wilaya') || 'N/A'}</p></div>
+                <div className="sm:col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Adresse</p><p className="text-xl font-bold">{getField(activeModal.customer, 'address', 'address') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Numéro Document</p><p className="text-xl font-bold">{getField(activeModal.customer, 'documentNumber', 'document_number') || getField(activeModal.customer, 'idCardNumber', 'id_card_number') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Date délivrance</p><p className="text-xl font-bold">{getField(activeModal.customer, 'documentDeliveryDate', 'document_delivery_date') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Adresse délivrance</p><p className="text-xl font-bold">{getField(activeModal.customer, 'documentDeliveryAddress', 'document_delivery_address') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Date expiration</p><p className="text-xl font-bold">{getField(activeModal.customer, 'documentExpiryDate', 'document_expiry_date') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Permis</p><p className="text-xl font-bold">{getField(activeModal.customer, 'licenseNumber', 'license_number') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Expiration Permis</p><p className="text-xl font-bold">{getField(activeModal.customer, 'licenseExpiry', 'license_expiry') || 'N/A'}</p></div>
+                <div><p className="text-[10px] font-black text-gray-400 uppercase mb-2">Délivrance Permis</p><p className="text-xl font-bold">{(getField(activeModal.customer, 'licenseIssueDate', 'license_issue_date') || 'N/A') + (getField(activeModal.customer, 'licenseIssuePlace', 'license_issue_place') ? ` - ${getField(activeModal.customer, 'licenseIssuePlace', 'license_issue_place')}` : '')}</p></div>
                 <div className="sm:col-span-2 p-6 bg-red-50 rounded-3xl border border-red-100 flex items-center justify-between">
                    <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Document laissé à l'agence</p>
                    <p className="text-xl font-black text-red-900">{activeModal.customer.documentLeftAtStore || 'Aucun'}</p>
@@ -384,6 +514,11 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ lang, customers, reservat
                 <div><p className="text-[10px] font-black uppercase opacity-60 mb-2">Valeur Client</p><p className="text-6xl font-black">{activeModal.customer.totalSpent.toLocaleString()} DZ</p></div>
                 <div className="text-right"><p className="text-[10px] font-black uppercase opacity-60 mb-2">Total Locations</p><p className="text-6xl font-black">{activeModal.customer.totalReservations}</p></div>
               </div>
+              {showRawCustomer && (
+                <pre className="mt-6 p-6 bg-gray-100 rounded-lg text-sm overflow-auto max-h-60">
+                  {JSON.stringify(activeModal.customer, null, 2)}
+                </pre>
+              )}
             </div>
           </div>
         </div>

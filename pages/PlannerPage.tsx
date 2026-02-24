@@ -82,6 +82,25 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
     documentImages: [],
     profilePicture: 'https://via.placeholder.com/200'
   });
+  const [profilePreviewNew, setProfilePreviewNew] = useState<string | null>(null);
+  const [docPreviewsNew, setDocPreviewsNew] = useState<string[]>([]);
+  const fileInputRefNew = useRef<HTMLInputElement | null>(null);
+  const docInputRefNew = useRef<HTMLInputElement | null>(null);
+
+  const handleImageUploadNew = (e: React.ChangeEvent<HTMLInputElement>, target: 'profile' | 'docs') => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach((file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          if (target === 'profile') setProfilePreviewNew(base64);
+          else setDocPreviewsNew(prev => [...prev, base64]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
   
   const [tempOptionCat, setTempOptionCat] = useState<RentalOption['category'] | null>(null);
   const [activeModal, setActiveModal] = useState<ActionModal>(null);
@@ -465,50 +484,154 @@ const PlannerPage: React.FC<PlannerPageProps> = ({
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 bg-gray-50/50 p-12 rounded-[4rem] border border-gray-100 animate-scale-in">
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 gap-4">
-                        <input type="text" placeholder="Prénom" onChange={e => setNewClientData({...newClientData, firstName: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
-                        <input type="text" placeholder="Nom" onChange={e => setNewClientData({...newClientData, lastName: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Prénom</label>
+                          <input type="text" placeholder="Prénom" value={newClientData.firstName || ''} onChange={e => setNewClientData({...newClientData, firstName: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Nom</label>
+                          <input type="text" placeholder="Nom" value={newClientData.lastName || ''} onChange={e => setNewClientData({...newClientData, lastName: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
                       </div>
-                      <input type="tel" placeholder="Téléphone" onChange={e => setNewClientData({...newClientData, phone: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
-                      <input type="email" placeholder="Email" onChange={e => setNewClientData({...newClientData, email: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
-                      <select value={newClientData.wilaya} onChange={e => setNewClientData({...newClientData, wilaya: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold appearance-none cursor-pointer focus:ring-2 ring-blue-300">
-                        {ALGERIAN_WILAYAS.map(w => <option key={w} value={w}>{w}</option>)}
-                      </select>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase">Numéro de téléphone</label>
+                        <input type="tel" placeholder="Téléphone" value={newClientData.phone || ''} onChange={e => setNewClientData({...newClientData, phone: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase">E-mail (optionnel)</label>
+                        <input type="email" placeholder="Email" value={newClientData.email || ''} onChange={e => setNewClientData({...newClientData, email: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Wilaya</label>
+                          <select value={newClientData.wilaya} onChange={e => setNewClientData({...newClientData, wilaya: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold appearance-none cursor-pointer focus:ring-2 ring-blue-300">
+                            {ALGERIAN_WILAYAS.map(w => <option key={w} value={w}>{w}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Document déposé à l'agence</label>
+                          <select value={newClientData.documentLeftAtStore || 'Aucun'} onChange={e => setNewClientData({...newClientData, documentLeftAtStore: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold appearance-none cursor-pointer focus:ring-2 ring-blue-300">
+                            {['Aucun', 'Passeport', 'Carte d\'identité', 'Permis de conduire', 'Chèque de garantie', 'Autre'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                     <div className="space-y-6">
-                      <textarea placeholder="Adresse complète" onChange={e => setNewClientData({...newClientData, address: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold h-24 resize-none focus:ring-2 ring-blue-300" />
-                      <input type="text" placeholder="N° CNI" onChange={e => setNewClientData({...newClientData, idCardNumber: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
-                      <div className="grid grid-cols-2 gap-4">
-                        <input type="text" placeholder="N° Permis" onChange={e => setNewClientData({...newClientData, licenseNumber: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
-                        <input type="date" placeholder="Expiration Permis" onChange={e => setNewClientData({...newClientData, licenseExpiry: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                      <textarea placeholder="Adresse complète" value={newClientData.address || ''} onChange={e => setNewClientData({...newClientData, address: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold h-24 resize-none focus:ring-2 ring-blue-300" />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Type Document</label>
+                          <select value={newClientData.documentType || ''} onChange={e => setNewClientData({...newClientData, documentType: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300">
+                            <option value="">Aucun</option>
+                            <option value="carte_identite">Carte d'identité</option>
+                            <option value="passeport">Passeport</option>
+                            <option value="autre">Autre</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Numéro Document</label>
+                          <input type="text" placeholder="Numéro Document" value={newClientData.documentNumber || newClientData.idCardNumber || ''} onChange={e => setNewClientData({...newClientData, documentNumber: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Date délivrance</label>
+                          <input type="date" placeholder="Date délivrance" value={newClientData.documentDeliveryDate || ''} onChange={e => setNewClientData({...newClientData, documentDeliveryDate: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Date expiration</label>
+                          <input type="date" placeholder="Date expiration" value={newClientData.documentExpiryDate || ''} onChange={e => setNewClientData({...newClientData, documentExpiryDate: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Adresse délivrance</label>
+                          <input type="text" placeholder="Adresse délivrance" value={newClientData.documentDeliveryAddress || ''} onChange={e => setNewClientData({...newClientData, documentDeliveryAddress: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">N° CNI</label>
+                          <input type="text" placeholder="N° CNI" value={newClientData.idCardNumber || ''} onChange={e => setNewClientData({...newClientData, idCardNumber: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">N° Permis</label>
+                          <input type="text" placeholder="N° Permis" value={newClientData.licenseNumber || ''} onChange={e => setNewClientData({...newClientData, licenseNumber: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Expiration Permis</label>
+                          <input type="date" placeholder="Expiration Permis" value={newClientData.licenseExpiry || ''} onChange={e => setNewClientData({...newClientData, licenseExpiry: e.target.value})} className="px-6 py-4 rounded-2xl bg-white shadow-sm outline-none font-bold focus:ring-2 ring-blue-300" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 items-center">
+                        <div className="bg-gray-50 p-6 rounded-2xl text-center">
+                          <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4">
+                            {profilePreviewNew ? <img src={profilePreviewNew} className="w-full h-full object-cover" /> : <img src={newClientData.profilePicture} className="w-full h-full object-cover" />}
+                          </div>
+                          <button type="button" onClick={() => fileInputRefNew.current?.click()} className="px-4 py-2 bg-white rounded-2xl font-black">Photo de profil</button>
+                          <input type="file" ref={fileInputRefNew} className="hidden" accept="image/*" onChange={(e) => handleImageUploadNew(e, 'profile')} />
+                        </div>
+                        <div className="bg-gray-50 p-6 rounded-2xl">
+                          <div className="grid grid-cols-3 gap-2 mb-4">
+                            {docPreviewsNew.map((doc, i) => (
+                              <div key={i} className="relative aspect-[4/3] rounded-lg overflow-hidden">
+                                <img src={doc} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                          <button type="button" onClick={() => docInputRefNew.current?.click()} className="w-full px-4 py-3 bg-white rounded-2xl font-black">+ Documents numérisés</button>
+                          <input type="file" ref={docInputRefNew} className="hidden" multiple accept="image/*" onChange={(e) => handleImageUploadNew(e, 'docs')} />
+                        </div>
+                      </div>
+
                       <div className="flex gap-4">
                         <button onClick={() => setIsCreatingNewClient(false)} className="flex-1 py-4 text-gray-400 font-black uppercase text-[10px]">Annuler</button>
-                        <GradientButton onClick={() => {
+                        <GradientButton onClick={async () => {
                           if (!newClientData.firstName || !newClientData.lastName || !newClientData.phone) {
                             alert('Veuillez remplir les champs requis');
                             return;
                           }
-                          // Create customer directly in form - will be saved with reservation
-                          const c: Customer = {
-                            id: `c-${Date.now()}`,
-                            firstName: newClientData.firstName || '',
-                            lastName: newClientData.lastName || '',
-                            phone: newClientData.phone || '',
-                            email: newClientData.email || '',
-                            idCardNumber: newClientData.idCardNumber || '',
-                            wilaya: newClientData.wilaya || '16 - Alger',
-                            address: newClientData.address || '',
-                            licenseNumber: newClientData.licenseNumber || '',
-                            licenseExpiry: newClientData.licenseExpiry || '',
-                            profilePicture: newClientData.profilePicture || '',
-                            documentImages: [],
-                            documentLeftAtStore: 'Aucun',
-                            totalReservations: 0,
-                            totalSpent: 0
-                          };
-                          setFormData({...formData, customerId: c.id});
-                          setIsCreatingNewClient(false);
-                          alert('Client créé avec succès ! Continuez la réservation.');
+                          setLoading(true);
+                          try {
+                            const dbData: any = {
+                              first_name: newClientData.firstName,
+                              last_name: newClientData.lastName,
+                              phone: newClientData.phone,
+                              email: newClientData.email || null,
+                              id_card_number: newClientData.idCardNumber || null,
+                              document_type: newClientData.documentType || null,
+                              document_number: newClientData.documentNumber || null,
+                              document_delivery_date: newClientData.documentDeliveryDate || null,
+                              document_delivery_address: newClientData.documentDeliveryAddress || null,
+                              document_expiry_date: newClientData.documentExpiryDate || null,
+                              wilaya: newClientData.wilaya || '16 - Alger',
+                              address: newClientData.address || null,
+                              license_number: newClientData.licenseNumber || null,
+                              license_expiry: newClientData.licenseExpiry || null,
+                              license_issue_date: newClientData.licenseIssueDate || null,
+                              license_issue_place: newClientData.licenseIssuePlace || null,
+                              profile_picture: profilePreviewNew || newClientData.profilePicture || null,
+                              document_images: docPreviewsNew || [],
+                              document_left_at_store: newClientData.documentLeftAtStore || 'Aucun'
+                            };
+
+                            const { data: inserted, error } = await supabase.from('customers').insert([dbData]).select().single();
+                            if (error || !inserted) throw error || new Error('Insertion failed');
+                            setFormData({...formData, customerId: inserted.id});
+                            setIsCreatingNewClient(false);
+                            setNewClientData({ wilaya: '16 - Alger', documentImages: [], profilePicture: 'https://via.placeholder.com/200' });
+                            setProfilePreviewNew(null);
+                            setDocPreviewsNew([]);
+                            alert('Client créé et sélectionné pour la réservation.');
+                          } catch (err: any) {
+                            console.error(err);
+                            alert('Erreur lors de la création du client: ' + (err?.message || err));
+                          } finally { setLoading(false); }
                         }} className="flex-[2] !py-4 rounded-2xl shadow-xl">Valider</GradientButton>
                       </div>
                     </div>
